@@ -358,9 +358,8 @@ def predict_file():
         # Fallback values when running in cloud serverless mode
         original_samples = 0
         duration_sec = 0.0
-        score = 0.5  # Neutral fallback
-        status_val = config.STATE_SAFE
-        threat_label = "AASIST Offline (Using Multi-Model Fusion)"
+        score = fusion.get("finalScore", 0.5)
+        status_val, threat_label = _build_aasist_status(score)
 
     # -----------------------------------------------------------------------
     # 3-Model Fusion
@@ -376,7 +375,7 @@ def predict_file():
 
     if not aasist_ok:
         # Reflect composite fusion score as primary score when AASIST is offline
-        score = fusion.get("genuine_probability", 0.5)
+        score = fusion.get("finalScore", 0.5)
         status_val, threat_label = _build_aasist_status(score)
 
     # -----------------------------------------------------------------------
@@ -588,8 +587,8 @@ def process_live_chunk():
         rawnet2_weight=config.RAWNET2_WEIGHT,
     )
 
-    genuine_score = float(fusion.get("genuine_probability", 0.5))
-    spoof_score = float(fusion.get("finalScore", 1.0 - genuine_score))
+    genuine_score = float(fusion.get("finalScore", 0.5))
+    spoof_score = float(fusion.get("finalSpoof", 1.0 - genuine_score))
 
     # Update system state & smoothed history
     current_state, smoothed_val = system.update_external_inference(genuine_score, speech_ratio)

@@ -287,14 +287,33 @@ class GeminiAudioAnalyzer:
         if not raw_text:
             return _make_unavailable_result("Gemini returned an empty response")
 
-        # Strip markdown fences if the model wrapped JSON despite instructions
-        clean_text = re.sub(r'^```(?:json)?\s*', '', raw_text, flags=re.MULTILINE)
-        clean_text = re.sub(r'\s*```$', '', clean_text, flags=re.MULTILINE).strip()
+        # Attempt to extract JSON object if surrounded by markdown or noise
+        import re
+        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if not json_match:
+            # If no closing brace, it might be truncated. Try to match up to the end.
+            json_match = re.search(r'\{.*', raw_text, re.DOTALL)
+            if not json_match:
+                return _make_unavailable_result("Gemini returned no JSON object")
+            
+        clean_text = json_match.group(0).strip()
+
+        # Fix common truncated JSON by appending closing braces/brackets if missing
+        open_braces = clean_text.count('{') - clean_text.count('}')
+        open_brackets = clean_text.count('[') - clean_text.count(']')
+        
+        # Remove trailing commas before closing
+        clean_text = re.sub(r',\s*$', '', clean_text)
+        
+        if open_brackets > 0:
+            clean_text += ']' * open_brackets
+        if open_braces > 0:
+            clean_text += '}' * open_braces
 
         try:
             data = json.loads(clean_text)
         except json.JSONDecodeError as exc:
-            logger.error("[Gemini] JSON parse error: %s | Raw: %s", exc, raw_text[:500])
+            logger.error("[Gemini] JSON parse error: %s | Cleaned: %s", exc, clean_text[:500])
             return _make_unavailable_result("Gemini returned malformed JSON")
 
         return self._validate_and_normalize(data)
