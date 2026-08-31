@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import concurrent.futures
+from typing import Any
 
 try:
     import torch
@@ -266,6 +267,18 @@ def _build_aasist_status(score: float) -> tuple[str, str]:
         return config.STATE_SAFE, "Safe (Likely Authentic)"
 
 
+def _sanitize_error_str(err: Any) -> str:
+    """Sanitize error messages to prevent exposing secrets, API keys, or empty strings."""
+    if err is None:
+        return "Model unavailable"
+    msg = str(err).strip()
+    if not msg:
+        return type(err).__name__ if not isinstance(err, str) else "Model execution failed"
+    if config.GEMINI_API_KEY and config.GEMINI_API_KEY in msg:
+        msg = msg.replace(config.GEMINI_API_KEY, "[REDACTED_API_KEY]")
+    return msg[:300]
+
+
 @app.route('/api/predict', methods=['POST'])
 def predict_file():
     # --- Validate upload ---
@@ -308,7 +321,7 @@ def predict_file():
             aasist_result = _run_aasist(audio_bytes, filename=filename)
             logger.info("[API] AASIST complete: score=%.4f", aasist_result["score"])
         except Exception as exc:
-            aasist_error = str(exc)
+            aasist_error = str(exc) if str(exc).strip() else type(exc).__name__
             logger.error("[API] AASIST failed: %s", exc)
 
     def run_gemini_task():
@@ -339,7 +352,7 @@ def predict_file():
             executor.submit(run_gemini_task),
             executor.submit(run_rawnet2_task),
         ]
-        # Increase timeout to allow Gemini to complete (currently ~21s in production)
+        # Allow sufficient time for all models
         concurrent.futures.wait(futures, timeout=45.0)
 
     # Check if at least one model succeeded
@@ -348,13 +361,22 @@ def predict_file():
     aasist_ok = aasist_result is not None
 
     if not (aasist_ok or gemini_ok or rawnet2_ok):
+        aasist_err_detail = _sanitize_error_str(
+            aasist_error or ("AASIST model is not loaded" if (not system.model_loader or system.model_loader.model is None) else "AASIST processing failed")
+        )
+        rawnet2_err_detail = _sanitize_error_str(
+            (rawnet2_result.get("error") if rawnet2_result else None) or ("RawNet2 model is not loaded" if not _rawnet2_analyzer.is_available() else "RawNet2 processing failed")
+        )
+        gemini_err_detail = _sanitize_error_str(
+            (gemini_result.get("error") if gemini_result else None) or ((gemini_result.get("limitations") or ["Gemini unavailable"])[0] if gemini_result else ("Gemini API key not configured" if not config.GEMINI_API_KEY else "Gemini processing failed"))
+        )
         return jsonify({
             "success": False,
             "error": "Audio processing failed across all models",
             "models": {
-                "aasist": {"available": False, "error": aasist_error},
-                "rawnet2": {"available": False},
-                "gemini": {"available": False}
+                "aasist": {"available": False, "error": aasist_err_detail},
+                "rawnet2": {"available": False, "error": rawnet2_err_detail},
+                "gemini": {"available": False, "error": gemini_err_detail}
             }
         }), 500
 
@@ -390,15 +412,18 @@ def predict_file():
         # Reflect composite fusion score as primary score when AASIST is offline
         score = fusion.get("finalScore")
         if score is None:
-             return jsonify({
-                 "success": False,
-                 "error": "Audio processing failed across all models",
-                 "models": {
-                     "aasist": {"available": False},
-                     "rawnet2": {"available": False},
-                     "gemini": {"available": False}
-                 }
-             }), 500
+            aasist_err_detail = _sanitize_error_str(aasist_error or "AASIST offline")
+            rawnet2_err_detail = _sanitize_error_str((rawnet2_result or {}).get("error") or "RawNet2 offline")
+            gemini_err_detail = _sanitize_error_str((gemini_result or {}).get("error") or "Gemini offline")
+            return jsonify({
+                "success": False,
+                "error": "Audio processing failed across all models",
+                "models": {
+                    "aasist": {"available": False, "error": aasist_err_detail},
+                    "rawnet2": {"available": False, "error": rawnet2_err_detail},
+                    "gemini": {"available": False, "error": gemini_err_detail}
+                }
+            }), 500
         status_val, threat_label = _build_aasist_status(score)
 
     # -----------------------------------------------------------------------

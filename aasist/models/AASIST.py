@@ -373,8 +373,11 @@ class CONV(nn.Module):
         filbandwidthsf = self.to_hz(filbandwidthsmel)
 
         self.mel = filbandwidthsf
-        self.hsupp = torch.arange(-(self.kernel_size - 1) / 2,
-                                  (self.kernel_size - 1) / 2 + 1)
+        # NumPy / PyTorch interoperability safeguard:
+        # Initializing hsupp as a NumPy array prevents RuntimeError: Numpy is not available
+        # during SincNet initialization under ABI-mismatched PyTorch/NumPy versions.
+        self.hsupp = np.arange(-(self.kernel_size - 1) / 2,
+                               (self.kernel_size - 1) / 2 + 1)
         self.band_pass = torch.zeros(self.out_channels, self.kernel_size)
         for i in range(len(self.mel) - 1):
             fmin = self.mel[i]
@@ -385,8 +388,8 @@ class CONV(nn.Module):
                 np.sinc(2*fmin*self.hsupp/self.sample_rate)
             hideal = hHigh - hLow
 
-            self.band_pass[i, :] = Tensor(np.hamming(
-                self.kernel_size)) * Tensor(hideal)
+            self.band_pass[i, :] = torch.tensor(np.hamming(
+                self.kernel_size) * hideal, dtype=torch.float32)
 
     def forward(self, x, mask=False):
         band_pass_filter = self.band_pass.clone().to(x.device)

@@ -245,23 +245,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================================
-    // 7. BROWSER LIVE MICROPHONE & MULTI-MODEL STREAMING MANAGER
+    // 7. UNIFIED API URL RESOLVER & LIVE DETECTION MANAGER
     // =========================================================================
+    function getApiUrl(path) {
+        const custom = localStorage.getItem('VOICEGUARD_BACKEND_URL') || '';
+        if (custom.trim()) {
+            const base = custom.trim().replace(/\/+$/, '');
+            return base + (path.startsWith('/') ? path : '/' + path);
+        }
+        const host = window.location.hostname;
+        const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+        const isRailway = host.endsWith('railway.app');
+        if (!isLocal && !isRailway) {
+            return 'https://voiceguard-ai-production.up.railway.app' + (path.startsWith('/') ? path : '/' + path);
+        }
+        return window.location.origin + (path.startsWith('/') ? path : '/' + path);
+    }
+
     class LiveDetectionManager {
         constructor() {
-            this.state = 'IDLE';
-            this.audioContext = null;
-            this.mediaStream = null;
+            this.state = 'STOPPED'; // STOPPED, REQUESTING_MIC, MIC_CONNECTED, LISTENING, ANALYZING, SAFE, SUSPICIOUS, HIGH_RISK, ERROR
+            this.stream = null;
+            this.audioCtx = null;
+            this.mediaRecorder = null;
             this.analyser = null;
             this.sourceNode = null;
             this.scriptNode = null;
-            
-            // Audio Buffer Configuration
-            this.targetSampleRate = 16000;
-            this.chunkSamples = 64600; // ~4.04s at 16kHz
-            this.rollingBuffer = new Float32Array(this.chunkSamples);
-            this.bufferIndex = 0;
-            this.totalSamplesRecorded = 0;
             this.inFlight = false;
             this.streamTimer = null;
             this.processedChunks = 0;
@@ -272,14 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         getBackendUrl(path) {
-            const custom = localStorage.getItem('VOICEGUARD_BACKEND_URL') || '';
-            const base = custom.trim() ? custom.trim().replace(/\/+$/, '') : window.location.origin;
-            return base + (path.startsWith('/') ? path : '/' + path);
+            return getApiUrl(path);
         }
 
         async checkBackendHealth() {
             try {
-                const res = await fetch(this.getBackendUrl('/health'), { method: 'GET' });
+                const res = await fetch(getApiUrl('/health'), { method: 'GET' });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const health = await res.json();
                 
@@ -696,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Live detection active -> Real audio chunks take precedence
         }
         try {
-            const response = await fetch('/status');
+            const response = await fetch(getApiUrl('/status'));
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             updateDashboardWithRealData(data);
@@ -906,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', async () => {
             const filename = btn.dataset.file;
             try {
-                const response = await fetch(`/api/sample_file/${filename}`);
+                const response = await fetch(getApiUrl(`/api/sample_file/${filename}`));
                 if (!response.ok) throw new Error("Could not fetch sample");
                 const blob = await response.blob();
                 const file = new File([blob], filename, { type: "audio/wav" });
@@ -954,7 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const stepTimer2 = setTimeout(() => { setStep('fusion', 'active'); }, 1100);
 
             try {
-                const response = await fetch('/api/predict', {
+                const response = await fetch(getApiUrl('/api/predict'), {
                     method: 'POST',
                     body: formData
                 });

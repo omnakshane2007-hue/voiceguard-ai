@@ -39,7 +39,8 @@ def _make_unavailable_result(reason: str) -> dict[str, Any]:
         "confidence": None,
         "evidence": [],
         "suspiciousSegments": [],
-        "limitations": [reason],
+        "limitations": [reason] if reason else [],
+        "error": reason,
     }
 
 
@@ -60,6 +61,7 @@ def _make_success_result(
         "evidence": evidence,
         "suspiciousSegments": suspicious_segments,
         "limitations": limitations,
+        "error": None,
     }
 
 
@@ -133,6 +135,7 @@ class GeminiAudioAnalyzer:
         self._api_key = api_key
         self._timeout = timeout
         self._client = None
+        self._cooldown_until = 0.0
 
     def _get_client(self):
         """Lazily initialize the Gemini client."""
@@ -144,6 +147,17 @@ class GeminiAudioAnalyzer:
     def is_configured(self) -> bool:
         """Returns True if a non-empty API key is configured."""
         return bool(self._api_key and self._api_key.strip())
+
+    def _extract_retry_delay(self, error_text: str) -> int:
+        """Extract retry delay in seconds from Gemini error string or payload."""
+        delay = 60
+        match = re.search(r'retry\s*(?:in|after)?\s*[:\'"]?\s*(\d+(?:\.\d+)?)s?', error_text.lower())
+        if match:
+            try:
+                delay = max(1, int(round(float(match.group(1)))))
+            except ValueError:
+                pass
+        return delay
 
     def analyze(self, audio_bytes: bytes, mime_type: str = "audio/wav") -> dict[str, Any]:
         """
@@ -160,6 +174,13 @@ class GeminiAudioAnalyzer:
         if not self.is_configured():
             logger.warning("[Gemini] API key not configured. Skipping Gemini analysis.")
             return _make_unavailable_result("Gemini API key not configured")
+
+        # Cooldown guard — prevent unneeded network requests when quota is exhausted
+        now = time.time()
+        if now < self._cooldown_until:
+            remaining = max(1, int(self._cooldown_until - now))
+            logger.info("[Gemini] In cooldown (%ds remaining). Returning unavailable immediately.", remaining)
+            return _make_unavailable_result(f"Gemini API quota or rate limit exceeded. Retry delay: {remaining}s")
 
         # Normalize mime type
         mime_type = mime_type.lower().split(";")[0].strip()
@@ -196,18 +217,11 @@ class GeminiAudioAnalyzer:
             logger.error("[Gemini] File upload failed: %s", msg)
             if "API_KEY" in msg.upper() or "INVALID" in msg.upper() or "FORBIDDEN" in msg.upper():
                 return _make_unavailable_result("Gemini API key is invalid or missing")
-            if "QUOTA" in msg.upper() or "RATE" in msg.upper() or "429" in msg:
-                # Attempt to extract retry delay
-                delay = 60
-                import re
-                match = re.search(r'retry after (\d+)', msg.lower())
-                if match:
-                    try:
-                        delay = int(match.group(1))
-                    except ValueError:
-                        pass
+            if "QUOTA" in msg.upper() or "RATE" in msg.upper() or "429" in msg or "RESOURCE_EXHAUSTED" in msg.upper():
+                delay = self._extract_retry_delay(msg)
+                self._cooldown_until = time.time() + delay
                 return _make_unavailable_result(f"Gemini API quota or rate limit exceeded. Retry delay: {delay}s")
-            return _make_unavailable_result(f"Gemini audio upload failed")
+            return _make_unavailable_result("Gemini audio upload failed")
 
         upload_time = time.monotonic() - t0
         logger.info("[Gemini] Upload complete in %.2fs. Running analysis...", upload_time)
@@ -250,15 +264,9 @@ class GeminiAudioAnalyzer:
                 logger.error("[Gemini] All models failed. Last error: %s", last_error)
                 if "TIMEOUT" in last_error.upper() or "deadline" in last_error.lower():
                     return _make_unavailable_result("Gemini analysis timed out")
-                if "QUOTA" in last_error.upper() or "RATE" in last_error.upper() or "429" in last_error:
-                    delay = 60
-                    import re
-                    match = re.search(r'retry after (\d+)', last_error.lower())
-                    if match:
-                        try:
-                            delay = int(match.group(1))
-                        except ValueError:
-                            pass
+                if "QUOTA" in last_error.upper() or "RATE" in last_error.upper() or "429" in last_error or "RESOURCE_EXHAUSTED" in last_error.upper():
+                    delay = self._extract_retry_delay(last_error)
+                    self._cooldown_until = time.time() + delay
                     return _make_unavailable_result(f"Gemini API quota or rate limit exceeded. Retry delay: {delay}s")
                 return _make_unavailable_result("Gemini inference failed")
 

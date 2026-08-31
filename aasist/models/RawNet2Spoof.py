@@ -70,22 +70,27 @@ class SincConv(nn.Module):
         filbandwidthsmel = np.linspace(fmelmin, fmelmax, self.out_channels + 1)
         filbandwidthsf = self.to_hz(filbandwidthsmel)  # Mel to Hz conversion
         self.mel = filbandwidthsf
-        self.hsupp = torch.arange(-(self.kernel_size - 1) / 2,
-                                  (self.kernel_size - 1) / 2 + 1)
+        # NumPy / PyTorch interoperability safeguard:
+        # Initializing hsupp as a NumPy array and ensuring hsupp_np is passed to np.sinc()
+        # avoids RuntimeError: Numpy is not available across all Python/PyTorch/NumPy versions.
+        self.hsupp = np.arange(-(self.kernel_size - 1) / 2,
+                               (self.kernel_size - 1) / 2 + 1)
         self.band_pass = torch.zeros(self.out_channels, self.kernel_size)
 
     def forward(self, x):
+        # NumPy / PyTorch interoperability safeguard:
+        hsupp_np = self.hsupp.detach().cpu().numpy() if isinstance(self.hsupp, torch.Tensor) else self.hsupp
         for i in range(len(self.mel) - 1):
             fmin = self.mel[i]
             fmax = self.mel[i + 1]
             hHigh = (2 * fmax / self.sample_rate) * np.sinc(
-                2 * fmax * self.hsupp / self.sample_rate)
+                2 * fmax * hsupp_np / self.sample_rate)
             hLow = (2 * fmin / self.sample_rate) * np.sinc(
-                2 * fmin * self.hsupp / self.sample_rate)
+                2 * fmin * hsupp_np / self.sample_rate)
             hideal = hHigh - hLow
 
-            self.band_pass[i, :] = Tensor(np.hamming(
-                self.kernel_size)) * Tensor(hideal)
+            self.band_pass[i, :] = torch.tensor(
+                np.hamming(self.kernel_size) * hideal, dtype=torch.float32)
 
         band_pass_filter = self.band_pass.to(x.device)
 

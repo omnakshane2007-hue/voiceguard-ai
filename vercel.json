@@ -1,14 +1,24 @@
 {
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
-  },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/api/index.py"
+      "source": "/api/:path*",
+      "destination": "https://voiceguard-ai-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://voiceguard-ai-production.up.railway.app/health"
+    },
+    {
+      "source": "/status",
+      "destination": "https://voiceguard-ai-production.up.railway.app/status"
+    },
+    {
+      "source": "/report/:path*",
+      "destination": "https://voiceguard-ai-production.up.railway.app/report/:path*"
+    },
+    {
+      "source": "/report",
+      "destination": "https://voiceguard-ai-production.up.railway.app/report"
     }
   ]
 }
