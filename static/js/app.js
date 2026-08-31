@@ -186,13 +186,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        elements.tabContents.forEach(content => {
-            if (content.id === `tab-${tabId}`) {
-                content.classList.add('active');
-            } else {
-                content.classList.remove('active');
-            }
-        });
+        // Smooth scroll to the section
+        const section = document.getElementById(`tab-${tabId}`);
+        if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
 
         // Trigger Canvas DPI recalculation after DOM display change
         setTimeout(() => {
@@ -350,14 +348,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.scoreText) {
             elements.scoreText.textContent = percentStr;
             elements.scoreText.className = isHighRisk 
-                ? "font-telemetry-mono text-2xl font-bold text-error" 
-                : (isSuspicious ? "font-telemetry-mono text-2xl font-bold text-[#f59e0b]" : "font-telemetry-mono text-2xl font-bold text-[#10b981]");
+                ? "font-display-lg text-[40px] tracking-tighter text-status-danger" 
+                : (isSuspicious ? "font-display-lg text-[40px] tracking-tighter text-status-warning" : "font-display-lg text-[40px] tracking-tighter text-status-safe");
         }
         if (elements.gaugeFill) {
-            elements.gaugeFill.setAttribute('stroke-dasharray', `${percentNum.toFixed(1)}, 100`);
+            const maxCircumference = 282.7; // 2 * pi * 45
+            const offset = maxCircumference * (1.0 - validScore);
+            elements.gaugeFill.setAttribute('stroke-dashoffset', offset);
             elements.gaugeFill.className = isHighRisk 
-                ? "text-error stroke-current" 
-                : (isSuspicious ? "text-[#f59e0b] stroke-current" : "text-[#10b981] stroke-current");
+                ? "text-status-danger stroke-current" 
+                : (isSuspicious ? "text-status-warning stroke-current" : "text-status-safe stroke-current");
         }
         if (elements.threatState) {
             elements.threatState.textContent = status;
@@ -1349,9 +1349,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (elements.scoreText) {
             elements.scoreText.textContent = `${data.genuine_probability_percent}%`;
+            if (elements.heroScoreText) elements.heroScoreText.textContent = `${data.genuine_probability_percent}%`;
             elements.scoreText.className = isHighRisk 
-                ? "font-telemetry-mono text-2xl font-bold text-error" 
-                : (isSuspicious ? "font-telemetry-mono text-2xl font-bold text-[#f59e0b]" : "font-telemetry-mono text-2xl font-bold text-[#10b981]");
+                ? "font-display-lg text-[40px] tracking-tighter text-status-danger" 
+                : (isSuspicious ? "font-display-lg text-[40px] tracking-tighter text-status-warning" : "font-display-lg text-[40px] tracking-tighter text-status-safe");
         }
 
         if (elements.scoreSublabel) {
@@ -1361,8 +1362,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.gaugeFill) {
             elements.gaugeFill.setAttribute('stroke-dasharray', `${data.genuine_probability_percent}, 100`);
             elements.gaugeFill.className = isHighRisk 
-                ? "text-error stroke-current" 
-                : (isSuspicious ? "text-[#f59e0b] stroke-current" : "text-[#10b981] stroke-current");
+                ? "text-status-danger stroke-current" 
+                : (isSuspicious ? "text-status-warning stroke-current" : "text-status-safe stroke-current");
         }
 
         if (elements.statusBar) {
