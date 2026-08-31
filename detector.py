@@ -24,6 +24,7 @@ class DetectionSystem:
         self.total_chunks = 0
         self.processed_chunks = 0
         self.last_update_time = None
+        self.latest_gemini_result = None
         
         self.prediction_history = []
         
@@ -113,6 +114,11 @@ class DetectionSystem:
             self._update_state_machine(self.smoothed_score)
 
         return self.status, self.smoothed_score
+
+    def update_gemini_result(self, result: dict):
+        """Thread-safe update of the latest asynchronous Gemini analysis result."""
+        self.latest_gemini_result = result
+        print(f"[DetectionSystem] Gemini result updated: {result.get('classification', 'UNKNOWN')}")
 
     def _detection_loop(self):
         chunk_number = 0

@@ -55,6 +55,9 @@ _gemini_analyzer = GeminiAudioAnalyzer(
     timeout=config.GEMINI_TIMEOUT_SECONDS,
 )
 
+# Global bounded executor for Gemini to prevent unbounded memory/rate limits
+GEMINI_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
 _rawnet2_analyzer = RawNet2Analyzer(
     weights_path=config.RAWNET2_WEIGHTS_PATH,
     config_path=config.RAWNET2_CONFIG_PATH,
@@ -498,46 +501,39 @@ def process_live_chunk():
             "message": "Silence or background noise filtered by VAD."
         })
 
-    # 5. Run available AI models in parallel on active speech chunk
+    # 5. Run available local AI models sequentially to avoid threading overhead and GIL contention
     aasist_result = None
-    gemini_result = None
     rawnet2_result = None
 
-    def run_aasist():
-        nonlocal aasist_result
-        try:
-            aasist_result = _run_aasist(audio_bytes, filename="live_chunk.wav")
-        except Exception as exc:
-            logger.debug("[Live] AASIST unavailable: %s", exc)
+    try:
+        aasist_result = _run_aasist(audio_bytes, filename="live_chunk.wav")
+    except Exception as exc:
+        logger.debug("[Live] AASIST unavailable: %s", exc)
 
-    def run_gemini():
-        nonlocal gemini_result
+    if _rawnet2_analyzer.is_available():
+        try:
+            rawnet2_result = _rawnet2_analyzer.analyze(audio_bytes, filename="live_chunk.wav")
+        except Exception as exc:
+            logger.debug("[Live] RawNet2 failed: %s", exc)
+
+    # 6. Dispatch Gemini analysis to background executor (Non-Blocking)
+    def _background_gemini_task(audio, mime):
         if config.GEMINI_API_KEY:
             try:
-                gemini_result = _gemini_analyzer.analyze(audio_bytes, mime_type="audio/wav")
+                res = _gemini_analyzer.analyze(audio, mime_type=mime)
+                system.update_gemini_result(res)
             except Exception as exc:
-                logger.debug("[Live] Gemini failed: %s", exc)
+                logger.debug("[Live] Background Gemini failed: %s", exc)
 
-    def run_rawnet2():
-        nonlocal rawnet2_result
-        if _rawnet2_analyzer.is_available():
-            try:
-                rawnet2_result = _rawnet2_analyzer.analyze(audio_bytes, filename="live_chunk.wav")
-            except Exception as exc:
-                logger.debug("[Live] RawNet2 failed: %s", exc)
+    if config.GEMINI_API_KEY:
+        GEMINI_EXECUTOR.submit(_background_gemini_task, audio_bytes, "audio/wav")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [
-            executor.submit(run_aasist),
-            executor.submit(run_gemini),
-            executor.submit(run_rawnet2),
-        ]
-        concurrent.futures.wait(futures, timeout=6.0)
+    # 7. Tri-Model Evidence Fusion (uses cached Gemini result if available)
+    gemini_cache = system.latest_gemini_result
 
-    # 6. Tri-Model Evidence Fusion
     fusion = fuse(
         aasist_result=aasist_result,
-        gemini_result=gemini_result,
+        gemini_result=gemini_cache,
         rawnet2_result=rawnet2_result,
         aasist_weight=config.AASIST_WEIGHT,
         gemini_weight=config.GEMINI_WEIGHT,
@@ -559,7 +555,7 @@ def process_live_chunk():
         "audioLevel": audio_level,
         "aasistScore": round(float(aasist_result["score"]), 4) if aasist_result else None,
         "rawnet2Score": round(float(rawnet2_result["spoofScore"]), 4) if (rawnet2_result and rawnet2_result.get("spoofScore") is not None) else None,
-        "geminiScore": round(float(gemini_result["suspicionScore"] / 100.0), 4) if (gemini_result and gemini_result.get("suspicionScore") is not None) else None,
+        "geminiScore": round(float(gemini_cache["suspicionScore"] / 100.0), 4) if (gemini_cache and gemini_cache.get("suspicionScore") is not None) else None,
         "fusionScore": round(spoof_score, 4),
         "smoothedScore": round(smoothed_val, 4),
         "modelDisagreement": bool(fusion.get("modelDisagreement", False)),
@@ -569,7 +565,7 @@ def process_live_chunk():
         "models": {
             "aasist": aasist_result is not None,
             "rawnet2": rawnet2_result is not None and rawnet2_result.get("available", False),
-            "gemini": gemini_result is not None and gemini_result.get("available", False)
+            "gemini": gemini_cache is not None and gemini_cache.get("available", False)
         },
         "fusion": fusion
     })
