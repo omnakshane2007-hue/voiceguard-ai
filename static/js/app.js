@@ -260,15 +260,169 @@ document.addEventListener('DOMContentLoaded', () => {
         return normalizedPath;
     }
 
+    // =========================================================================
+    // AUTHORITATIVE LIVE STATE & VALIDATION
+    // =========================================================================
+    const liveState = {
+        score: 1.0, // Genuine confidence (0.0 to 1.0)
+        smoothedScore: 1.0,
+        currentScore: 1.0,
+        fusionScore: 0.0,
+        state: "SAFE",
+        speechRatio: 0.0,
+        speechDetected: false,
+        totalChunks: 0,
+        processedChunks: 0,
+        latencyMs: 0,
+        models: { aasist: true, rawnet2: true, gemini: false },
+        timestamp: Date.now()
+    };
+
+    function validateScore(score) {
+        if (typeof score !== 'number' || isNaN(score) || !Number.isFinite(score)) {
+            return null;
+        }
+        return Math.max(0.0, Math.min(1.0, score));
+    }
+
+    /**
+     * UNIFIED AUTHORITATIVE METER RENDERER
+     * Both Meter #1 (Hero Threat Gauge on Overview) and Meter #2 (Authenticity / Secondary Gauge)
+     * and Session Analytics strictly derive from this same function.
+     */
+    function renderLiveScore(score, telemetry = {}) {
+        const validScore = validateScore(score);
+        if (validScore === null) {
+            console.warn("[VG-LIVE] Invalid score received; skipping renderLiveScore update:", score);
+            return;
+        }
+
+        const status = telemetry.status || (validScore < 0.30 ? "HIGH_RISK" : (validScore < 0.60 ? "SUSPICIOUS" : "SAFE"));
+        const percentNum = validScore * 100;
+        const percentStr = `${percentNum.toFixed(1)}%`;
+        const speechRatio = typeof telemetry.speechRatio === 'number' ? telemetry.speechRatio : 0.0;
+        const totalChunks = telemetry.totalChunks || liveState.totalChunks;
+        const processedChunks = telemetry.processedChunks || liveState.processedChunks;
+        const isHighRisk = status === "HIGH_RISK";
+        const isSuspicious = status === "SUSPICIOUS";
+
+        // Update shared live state
+        liveState.score = validScore;
+        liveState.state = status;
+        liveState.timestamp = Date.now();
+
+        // ---------------------------------------------------------------------
+        // 1. METER #1: HERO THREAT GAUGE (Overview Tab)
+        // ---------------------------------------------------------------------
+        if (elements.heroScoreText && elements.heroGaugeCircle) {
+            elements.heroScoreText.textContent = percentStr;
+            elements.heroScoreLabel.textContent = "Genuine Confidence";
+
+            const maxCircumference = 282.7; // 2 * pi * 45
+            const offset = maxCircumference * (1.0 - validScore);
+            elements.heroGaugeCircle.setAttribute('stroke-dashoffset', offset);
+
+            if (isHighRisk) {
+                elements.heroGaugeCircle.setAttribute('stroke', '#ba1a1a');
+                if (elements.heroRiskText) elements.heroRiskText.textContent = "HIGH RISK ATTACK";
+                if (elements.heroRiskBadge) elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#ffdad6] border border-[#ba1a1a] rounded-full flex items-center gap-2";
+                if (elements.heroRiskDot) elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#ba1a1a] pulse-dot";
+                if (elements.heroSubtext) elements.heroSubtext.textContent = "Voice cloning signature detected. Probability of authentic speech is critically low.";
+            } else if (isSuspicious) {
+                elements.heroGaugeCircle.setAttribute('stroke', '#f59e0b');
+                if (elements.heroRiskText) elements.heroRiskText.textContent = "SUSPICIOUS SPEECH";
+                if (elements.heroRiskBadge) elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#fef3c7] border border-[#f59e0b] rounded-full flex items-center gap-2";
+                if (elements.heroRiskDot) elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#f59e0b]";
+                if (elements.heroSubtext) elements.heroSubtext.textContent = "Anomalous frequency distribution. Secondary verification challenge advised.";
+            } else {
+                elements.heroGaugeCircle.setAttribute('stroke', '#10b981');
+                if (elements.heroRiskText) elements.heroRiskText.textContent = "LOW RISK (SAFE)";
+                if (elements.heroRiskBadge) elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#d1fae5] border border-[#10b981] rounded-full flex items-center gap-2";
+                if (elements.heroRiskDot) elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#10b981]";
+                if (elements.heroSubtext) elements.heroSubtext.textContent = "Natural glottal and vocal tract characteristics verified.";
+            }
+            console.log(`[VG-LIVE] meter1 updated (${percentStr})`);
+        }
+
+        // ---------------------------------------------------------------------
+        // 2. METER #2: SECONDARY / THREAT RESULT GAUGE (Analysis Tab & AI Panel)
+        // ---------------------------------------------------------------------
+        if (elements.scoreText) {
+            elements.scoreText.textContent = percentStr;
+            elements.scoreText.className = isHighRisk 
+                ? "font-telemetry-mono text-2xl font-bold text-error" 
+                : (isSuspicious ? "font-telemetry-mono text-2xl font-bold text-[#f59e0b]" : "font-telemetry-mono text-2xl font-bold text-[#10b981]");
+        }
+        if (elements.gaugeFill) {
+            elements.gaugeFill.setAttribute('stroke-dasharray', `${percentNum.toFixed(1)}, 100`);
+            elements.gaugeFill.className = isHighRisk 
+                ? "text-error stroke-current" 
+                : (isSuspicious ? "text-[#f59e0b] stroke-current" : "text-[#10b981] stroke-current");
+        }
+        if (elements.threatState) {
+            elements.threatState.textContent = status;
+            if (isHighRisk) {
+                elements.threatState.className = "inline-block border border-error text-error bg-error-container px-3 py-1 font-label-caps text-label-caps rounded-sm uppercase";
+            } else if (isSuspicious) {
+                elements.threatState.className = "inline-block border border-tertiary-container text-tertiary-container bg-tertiary-fixed px-3 py-1 font-label-caps text-label-caps rounded-sm uppercase";
+            } else {
+                elements.threatState.className = "inline-block border border-secondary text-secondary bg-secondary-fixed px-3 py-1 font-label-caps text-label-caps rounded-sm uppercase";
+            }
+        }
+        if (elements.metaGenuineProb) elements.metaGenuineProb.textContent = percentStr;
+        if (elements.metaSpoofProb) elements.metaSpoofProb.textContent = `${((1 - validScore) * 100).toFixed(1)}%`;
+        if (elements.aiFusionScore) {
+            elements.aiFusionScore.textContent = percentStr;
+            elements.aiFusionScore.className = isHighRisk ? "font-telemetry-mono text-xs font-bold text-error" : (isSuspicious ? "font-telemetry-mono text-xs font-bold text-[#f59e0b]" : "font-telemetry-mono text-xs font-bold text-secondary");
+        }
+        if (elements.aiFusionBar) {
+            elements.aiFusionBar.style.width = `${percentNum.toFixed(1)}%`;
+            elements.aiFusionBar.className = isHighRisk ? "h-full transition-all duration-700 bg-error" : (isSuspicious ? "h-full transition-all duration-700 bg-[#f59e0b]" : "h-full transition-all duration-700 bg-secondary");
+        }
+        console.log(`[VG-LIVE] meter2 updated (${percentStr})`);
+
+        // ---------------------------------------------------------------------
+        // 3. STATS & BENTO TELEMETRY
+        // ---------------------------------------------------------------------
+        if (elements.liveHysteresisState) {
+            elements.liveHysteresisState.textContent = status;
+            elements.liveHysteresisState.className = isHighRisk ? "font-display-lg text-headline-md text-[#ba1a1a]" : (isSuspicious ? "font-display-lg text-headline-md text-[#f59e0b]" : "font-display-lg text-headline-md text-[#10b981]");
+        }
+        if (elements.liveVadRatio) elements.liveVadRatio.textContent = speechRatio.toFixed(2);
+        if (elements.liveChunkCount) elements.liveChunkCount.textContent = `${processedChunks} / ${totalChunks}`;
+        if (elements.liveLatencyPill && telemetry.latencyMs) {
+            elements.liveLatencyPill.textContent = `LATENCY: ${telemetry.latencyMs} ms`;
+        }
+
+        // ---------------------------------------------------------------------
+        // 4. CHART & VISUALIZERS
+        // ---------------------------------------------------------------------
+        if (chart && telemetry.currentScore !== undefined && validScore >= 0) {
+            chart.addPoint(telemetry.currentScore, validScore);
+        }
+        if (visualizer) visualizer.setActivity(speechRatio, status);
+        if (liveConsoleVisualizer) liveConsoleVisualizer.setActivity(speechRatio, status);
+        updatePipelineWorkflowNodes(true, speechRatio, processedChunks, status);
+
+        // ---------------------------------------------------------------------
+        // 5. SESSION ANALYTICS REFRESH
+        // ---------------------------------------------------------------------
+        updateAnalyticsScreen();
+    }
+
     class LiveDetectionManager {
         constructor() {
             this.state = 'STOPPED'; // STOPPED, REQUESTING_MIC, MIC_CONNECTED, LISTENING, ANALYZING, SAFE, SUSPICIOUS, HIGH_RISK, ERROR
-            this.stream = null;
-            this.audioCtx = null;
-            this.mediaRecorder = null;
+            this.mediaStream = null;
+            this.audioContext = null;
             this.analyser = null;
             this.sourceNode = null;
             this.scriptNode = null;
+            this.targetSampleRate = 16000;
+            this.chunkSamples = 32000; // 2.0s of 16kHz audio buffer
+            this.rollingBuffer = new Float32Array(this.chunkSamples);
+            this.bufferIndex = 0;
+            this.totalSamplesRecorded = 0;
             this.inFlight = false;
             this.streamTimer = null;
             this.processedChunks = 0;
@@ -468,6 +622,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (liveConsoleVisualizer) liveConsoleVisualizer.attachAnalyser(this.analyser);
 
                 // 4. Script Processor for 16 kHz Chunk Ingestion
+                this.rollingBuffer = new Float32Array(this.chunkSamples);
+                this.bufferIndex = 0;
+                this.totalSamplesRecorded = 0;
+
                 this.scriptNode = this.audioContext.createScriptProcessor(4096, 1, 1);
                 const resampleRatio = nativeSampleRate / this.targetSampleRate;
 
@@ -534,16 +692,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const chunkRms = Math.sqrt(sumSq / this.chunkSamples);
             const wavBlob = this.encodeWAV(orderedSamples, this.targetSampleRate);
 
-            // Safe client diagnostic logging (NO audio content logged)
-            console.log("[VoiceGuard Mic Diagnostic]", {
-                seq: currentSeq,
-                sampleRate: this.targetSampleRate,
-                channels: 1,
-                samples: this.chunkSamples,
-                durationMs: Math.round((this.chunkSamples / this.targetSampleRate) * 1000),
-                rms: parseFloat(chunkRms.toFixed(4)),
-                byteLength: wavBlob.size
-            });
+            console.log(`[VG-LIVE] chunk #${currentSeq} generated size=${wavBlob.size} bytes rms=${chunkRms.toFixed(4)} samples=${this.chunkSamples}`);
+            console.log(`[VG-LIVE] request #${currentSeq} started`);
 
             const formData = new FormData();
             formData.append('file', wavBlob, 'live_chunk.wav');
@@ -562,25 +712,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 clearTimeout(abortTimeout);
                 const latencyMs = Math.round(performance.now() - sendTimestamp);
+                console.log(`[VG-LIVE] request #${currentSeq} response ${res.status}`);
 
                 if (!res.ok) {
                     throw new Error(`Server returned HTTP ${res.status}`);
                 }
 
                 const data = await res.json();
+                console.log(`[VG-LIVE] fusionScore=${data.fusionScore} smoothedScore=${data.smoothedScore} state=${data.state}`);
 
                 // Drop out-of-order delayed responses
                 if (currentSeq < this.latestProcessedSeq) {
-                    console.log(`[LiveDetectionManager] Dropping stale chunk response #${currentSeq} (latest is #${this.latestProcessedSeq})`);
+                    console.log(`[VG-LIVE] Dropping stale chunk response #${currentSeq} (latest is #${this.latestProcessedSeq})`);
                     return;
                 }
                 this.latestProcessedSeq = currentSeq;
+                console.log(`[VG-LIVE] accepted response #${currentSeq}`);
 
                 this.handleLiveTelemetry(data, latencyMs);
 
             } catch (err) {
                 clearTimeout(abortTimeout);
-                console.warn(`[LiveDetectionManager] Chunk #${currentSeq} inference error:`, err);
+                console.warn(`[VG-LIVE] Chunk #${currentSeq} inference error:`, err);
                 if (elements.liveLatencyPill) elements.liveLatencyPill.textContent = `LATENCY: ERR`;
             } finally {
                 this.inFlight = false;
@@ -592,13 +745,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const speechRatio = typeof data.speechRatio === 'number' ? data.speechRatio : 0.0;
             const status = data.state || (data.fusion && data.fusion.classification ? data.fusion.classification : "SAFE");
             
-            // Single source of truth: genuine score (0.0 to 1.0)
-            const smoothedScore = (typeof data.smoothedScore === 'number' && !isNaN(data.smoothedScore))
-                ? data.smoothedScore
-                : (data.fusion && typeof data.fusion.finalScore === 'number' ? data.fusion.finalScore : 1.0);
+            // Single authoritative score:
+            let authoritativeScore = validateScore(data.smoothedScore);
+            if (authoritativeScore === null) {
+                authoritativeScore = validateScore(data.currentScore);
+            }
+            if (authoritativeScore === null && data.fusion) {
+                authoritativeScore = validateScore(data.fusion.finalScore);
+            }
+            if (authoritativeScore === null) {
+                authoritativeScore = liveState.score; // Preserve previous valid score
+            }
+
             const currentScore = (typeof data.currentScore === 'number' && !isNaN(data.currentScore))
                 ? data.currentScore
-                : (data.fusion && typeof data.fusion.finalScore === 'number' ? data.fusion.finalScore : smoothedScore);
+                : authoritativeScore;
             const processingTimeMs = data.processingTimeMs || clientLatencyMs;
 
             if (isSpeech) {
@@ -606,26 +767,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.setState(status);
             }
 
-            if (elements.liveLatencyPill) {
-                elements.liveLatencyPill.textContent = `LATENCY: ${processingTimeMs} ms`;
-            }
+            liveState.smoothedScore = authoritativeScore;
+            liveState.currentScore = currentScore;
+            liveState.fusionScore = data.fusionScore || (1.0 - authoritativeScore);
+            liveState.state = status;
+            liveState.speechRatio = speechRatio;
+            liveState.speechDetected = isSpeech;
+            liveState.totalChunks = this.totalChunks;
+            liveState.processedChunks = this.processedChunks;
+            liveState.latencyMs = processingTimeMs;
+            liveState.timestamp = Date.now();
+            console.log(`[VG-LIVE] liveState updated: score=${(authoritativeScore * 100).toFixed(1)}% status=${status}`);
 
-            if (elements.liveVadRatio) elements.liveVadRatio.textContent = speechRatio.toFixed(2);
-            if (elements.liveChunkCount) elements.liveChunkCount.textContent = `${this.processedChunks} / ${this.totalChunks}`;
-            if (elements.liveHysteresisState) {
-                elements.liveHysteresisState.textContent = status;
-                elements.liveHysteresisState.className = status === "HIGH_RISK" ? "font-display-lg text-headline-md text-[#ba1a1a]" : (status === "SUSPICIOUS" ? "font-display-lg text-headline-md text-[#f59e0b]" : "font-display-lg text-headline-md text-[#10b981]");
-            }
-
-            if (visualizer) visualizer.setActivity(speechRatio, status);
-            if (liveConsoleVisualizer) liveConsoleVisualizer.setActivity(speechRatio, status);
-
-            updateHeroThreatGauge(smoothedScore, status, speechRatio, this.totalChunks);
-            updatePipelineWorkflowNodes(true, speechRatio, this.processedChunks, status);
-
-            if (chart && smoothedScore >= 0 && isSpeech) {
-                chart.addPoint(currentScore, smoothedScore);
-            }
+            // UNIFIED RENDER CALL
+            renderLiveScore(authoritativeScore, {
+                currentScore: currentScore,
+                status: status,
+                speechRatio: speechRatio,
+                totalChunks: this.totalChunks,
+                processedChunks: this.processedChunks,
+                latencyMs: processingTimeMs,
+                isSpeech: isSpeech,
+                models: data.models
+            });
 
             if (isSpeech) {
                 const eventType = status === "HIGH_RISK" ? "high_risk" : (status === "SUSPICIOUS" ? "suspicious" : "safe");
@@ -633,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 addTelemetryEvent(
                     `Live Speech Inference #${this.processedChunks}`,
-                    `Genuine: ${(smoothedScore * 100).toFixed(1)}% | Spoof: ${((1 - smoothedScore) * 100).toFixed(1)}% | ${modelInfo}`,
+                    `Genuine: ${(authoritativeScore * 100).toFixed(1)}% | Spoof: ${((1 - authoritativeScore) * 100).toFixed(1)}% | ${modelInfo}`,
                     eventType
                 );
 
@@ -641,8 +805,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: getFormattedDateTime(),
                     eventType: status === "SAFE" ? "Live Human Speech Verified" : (status === "SUSPICIOUS" ? "Anomalous Acoustic Deviation" : "Synthetic Voice Clone Attack"),
                     source: "Live Microphone (Channel 1)",
-                    confidencePercent: `${(smoothedScore * 100).toFixed(1)}%`,
-                    confidenceRaw: smoothedScore,
+                    confidencePercent: `${(authoritativeScore * 100).toFixed(1)}%`,
+                    confidenceRaw: authoritativeScore,
                     status: status === "SAFE" ? "CLEARED" : (status === "SUSPICIOUS" ? "FLAGGED" : "BLOCKED"),
                     riskLevel: status
                 });
@@ -717,6 +881,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (liveConsoleVisualizer) liveConsoleVisualizer.detachAnalyser();
 
             this.inFlight = false;
+            this.bufferIndex = 0;
+            this.totalSamplesRecorded = 0;
+            this.rollingBuffer = new Float32Array(this.chunkSamples);
             this.setState('STOPPED');
             addTelemetryEvent("Live Stream Stopped", "Microphone tracks released cleanly.", "normal");
         }
@@ -728,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 8. REAL-TIME TELEMETRY POLLING (/status)
     // =========================================================================
     async function fetchStatus() {
-        if (liveManager && ['MIC_CONNECTED', 'LISTENING', 'ANALYZING', 'SAFE', 'SUSPICIOUS', 'HIGH_RISK'].includes(liveManager.state)) {
+        if (liveManager && ['REQUESTING_MIC', 'MIC_CONNECTED', 'LISTENING', 'ANALYZING', 'SAFE', 'SUSPICIOUS', 'HIGH_RISK'].includes(liveManager.state)) {
             return; // Live detection active -> Real audio chunks take precedence
         }
         try {
@@ -740,15 +907,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             updateDashboardWithRealData(data);
         } catch (err) {
-            if (elements.sysText) elements.sysText.textContent = "STANDBY";
-            if (elements.sysDot) elements.sysDot.className = "w-2 h-2 rounded-full bg-[#76777d]";
+            if (elements.sysText && (!liveManager || liveManager.state === 'STOPPED')) {
+                elements.sysText.textContent = "STANDBY";
+            }
+            if (elements.sysDot && (!liveManager || liveManager.state === 'STOPPED')) {
+                elements.sysDot.className = "w-2 h-2 rounded-full bg-[#76777d]";
+            }
         }
     }
 
     function updateDashboardWithRealData(data) {
-        const score = data.current_score;
-        const smoothedScore = data.smoothed_score;
-        const speechRatio = data.speech_ratio || 0.0;
+        if (liveManager && ['REQUESTING_MIC', 'MIC_CONNECTED', 'LISTENING', 'ANALYZING', 'SAFE', 'SUSPICIOUS', 'HIGH_RISK'].includes(liveManager.state)) {
+            return; // Never overwrite live inference metrics while active
+        }
+
+        const score = typeof data.smoothed_score === 'number' ? data.smoothed_score : -1;
+        const currentScore = typeof data.current_score === 'number' ? data.current_score : score;
+        const speechRatio = typeof data.speech_ratio === 'number' ? data.speech_ratio : 0.0;
         const status = data.status || "SAFE";
         const isRecording = Boolean(data.is_recording);
         const totalChunks = data.total_chunks || 0;
@@ -760,23 +935,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (elements.sysText) elements.sysText.textContent = isRecording ? "SYSTEM ONLINE & MONITORING" : "VOICEGUARD AI READY";
         if (elements.sysDot) elements.sysDot.className = isRecording ? "w-2 h-2 rounded-full bg-[#10b981]" : "w-2 h-2 rounded-full bg-[#10b981]";
 
-        // Update Overview Threat Gauge
-        updateHeroThreatGauge(smoothedScore, status, speechRatio, totalChunks);
-
-        // Update Detection Pipeline Nodes
-        updatePipelineWorkflowNodes(isRecording, speechRatio, processedChunks, status);
-
-        // Update Live Console Tab
-        if (elements.liveVadRatio) elements.liveVadRatio.textContent = speechRatio.toFixed(2);
-        if (elements.liveChunkCount) elements.liveChunkCount.textContent = `${processedChunks} / ${totalChunks}`;
-        if (elements.liveHysteresisState) {
-            elements.liveHysteresisState.textContent = status;
-            elements.liveHysteresisState.className = status === "HIGH_RISK" ? "font-display-lg text-headline-md text-[#ba1a1a]" : (status === "SUSPICIOUS" ? "font-display-lg text-headline-md text-[#f59e0b]" : "font-display-lg text-headline-md text-[#10b981]");
-        }
-
-        // Telemetry Chart
-        if (chart && score >= 0) {
-            chart.addPoint(score, smoothedScore);
+        // Render live score on dashboard
+        if (score >= 0) {
+            renderLiveScore(score, {
+                currentScore: currentScore,
+                status: status,
+                speechRatio: speechRatio,
+                totalChunks: totalChunks,
+                processedChunks: processedChunks,
+                isSpeech: true
+            });
         }
 
         // Settings Model Loaded
@@ -788,55 +956,6 @@ document.addEventListener('DOMContentLoaded', () => {
             addTelemetryEvent("Hysteresis State Transition", `${lastStatus} &rarr; ${status}`, status === "SAFE" ? "safe" : "high_risk");
         }
         lastStatus = status;
-    }
-
-    // =========================================================================
-    // 8. HERO THREAT GAUGE CONTROLLER
-    // =========================================================================
-    function updateHeroThreatGauge(smoothedScore, status, speechRatio, totalChunks) {
-        if (!elements.heroGaugeCircle || !elements.heroScoreText) return;
-
-        const maxCircumference = 282.7; // 2 * pi * 45
-
-        if (smoothedScore < 0) {
-            // Intentional startup state
-            elements.heroScoreText.textContent = "100%";
-            elements.heroScoreLabel.textContent = "Genuine (Baseline)";
-            elements.heroGaugeCircle.setAttribute('stroke', '#10b981');
-            elements.heroGaugeCircle.setAttribute('stroke-dashoffset', '0');
-            elements.heroRiskText.textContent = "VOICEGUARD AI READY";
-            elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#d1fae5] border border-[#10b981] rounded-full flex items-center gap-2";
-            elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#10b981]";
-            elements.heroSubtext.textContent = totalChunks > 0 ? "Monitoring background audio..." : "Waiting for speech input...";
-            return;
-        }
-
-        const percent = Math.min(100, Math.max(0, smoothedScore * 100));
-        elements.heroScoreText.textContent = `${percent.toFixed(0)}%`;
-        elements.heroScoreLabel.textContent = "Genuine Confidence";
-
-        const offset = maxCircumference * (1.0 - (percent / 100));
-        elements.heroGaugeCircle.setAttribute('stroke-dashoffset', offset);
-
-        if (status === "HIGH_RISK") {
-            elements.heroGaugeCircle.setAttribute('stroke', '#ba1a1a');
-            elements.heroRiskText.textContent = "HIGH RISK ATTACK";
-            elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#ffdad6] border border-[#ba1a1a] rounded-full flex items-center gap-2";
-            elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#ba1a1a] pulse-dot";
-            elements.heroSubtext.textContent = "Voice cloning signature detected. Probability of authentic speech is critically low.";
-        } else if (status === "SUSPICIOUS") {
-            elements.heroGaugeCircle.setAttribute('stroke', '#f59e0b');
-            elements.heroRiskText.textContent = "SUSPICIOUS SPEECH";
-            elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#fef3c7] border border-[#f59e0b] rounded-full flex items-center gap-2";
-            elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#f59e0b]";
-            elements.heroSubtext.textContent = "Anomalous frequency distribution. Secondary verification challenge advised.";
-        } else {
-            elements.heroGaugeCircle.setAttribute('stroke', '#10b981');
-            elements.heroRiskText.textContent = "LOW RISK (SAFE)";
-            elements.heroRiskBadge.className = "mt-4 px-4 py-1 bg-[#d1fae5] border border-[#10b981] rounded-full flex items-center gap-2";
-            elements.heroRiskDot.className = "w-2 h-2 rounded-full bg-[#10b981]";
-            elements.heroSubtext.textContent = "Natural glottal and vocal tract characteristics verified.";
-        }
     }
 
     // =========================================================================
