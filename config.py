@@ -44,8 +44,8 @@ HIGH_RISK_THRESHOLD = float(os.environ.get("HIGH_RISK_THRESHOLD", 0.3))
 # API key — NEVER expose this to the browser or log it.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
-# Request timeout in seconds for Gemini API calls
-GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", 30))
+# Request timeout in seconds for Gemini API calls (keep under 15s to prevent HTTP 502 gateway timeouts)
+GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", 12))
 
 # Maximum audio file size accepted by /api/predict (in MB)
 MAX_AUDIO_SIZE_MB = float(os.environ.get("MAX_AUDIO_SIZE_MB", 50))

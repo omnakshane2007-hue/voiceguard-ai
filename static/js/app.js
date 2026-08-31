@@ -248,18 +248,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. UNIFIED API URL RESOLVER & LIVE DETECTION MANAGER
     // =========================================================================
     function getApiUrl(path) {
+        const normalizedPath = path.startsWith('/') ? path : '/' + path;
         const custom = localStorage.getItem('VOICEGUARD_BACKEND_URL') || '';
         if (custom.trim()) {
             const base = custom.trim().replace(/\/+$/, '');
-            return base + (path.startsWith('/') ? path : '/' + path);
+            return base + normalizedPath;
         }
-        const host = window.location.hostname;
-        const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-        const isRailway = host.endsWith('railway.app');
-        if (!isLocal && !isRailway) {
-            return 'https://voiceguard-ai-production.up.railway.app' + (path.startsWith('/') ? path : '/' + path);
-        }
-        return window.location.origin + (path.startsWith('/') ? path : '/' + path);
+        // In all production (Vercel, Railway) and local development environments,
+        // use clean relative paths so the browser always communicates with the host origin.
+        // Vercel server-side rewrites automatically proxy /api/*, /status, /health to Railway backend.
+        return normalizedPath;
     }
 
     class LiveDetectionManager {

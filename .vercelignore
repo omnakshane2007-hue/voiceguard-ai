@@ -7,7 +7,9 @@ aasist/
 *.pth
 *.wav
 *.mpeg
+Procfile
 !templates/
 !static/
-!services/
 !api/
+!index.html
+!vercel.json
