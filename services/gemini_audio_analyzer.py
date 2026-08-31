@@ -197,7 +197,16 @@ class GeminiAudioAnalyzer:
             if "API_KEY" in msg.upper() or "INVALID" in msg.upper() or "FORBIDDEN" in msg.upper():
                 return _make_unavailable_result("Gemini API key is invalid or missing")
             if "QUOTA" in msg.upper() or "RATE" in msg.upper() or "429" in msg:
-                return _make_unavailable_result("Gemini API quota or rate limit exceeded")
+                # Attempt to extract retry delay
+                delay = 60
+                import re
+                match = re.search(r'retry after (\d+)', msg.lower())
+                if match:
+                    try:
+                        delay = int(match.group(1))
+                    except ValueError:
+                        pass
+                return _make_unavailable_result(f"Gemini API quota or rate limit exceeded. Retry delay: {delay}s")
             return _make_unavailable_result(f"Gemini audio upload failed")
 
         upload_time = time.monotonic() - t0
@@ -242,7 +251,15 @@ class GeminiAudioAnalyzer:
                 if "TIMEOUT" in last_error.upper() or "deadline" in last_error.lower():
                     return _make_unavailable_result("Gemini analysis timed out")
                 if "QUOTA" in last_error.upper() or "RATE" in last_error.upper() or "429" in last_error:
-                    return _make_unavailable_result("Gemini API quota or rate limit exceeded")
+                    delay = 60
+                    import re
+                    match = re.search(r'retry after (\d+)', last_error.lower())
+                    if match:
+                        try:
+                            delay = int(match.group(1))
+                        except ValueError:
+                            pass
+                    return _make_unavailable_result(f"Gemini API quota or rate limit exceeded. Retry delay: {delay}s")
                 return _make_unavailable_result("Gemini inference failed")
 
         finally:
@@ -298,8 +315,8 @@ class GeminiAudioAnalyzer:
         try:
             suspicion_score = max(0, min(100, int(float(raw_score))))
         except (TypeError, ValueError):
-            logger.warning("[Gemini] Invalid suspicion_score '%s', defaulting to 50", raw_score)
-            suspicion_score = 50
+            logger.warning("[Gemini] Invalid suspicion_score '%s'. Cannot reliably fuse without score.", raw_score)
+            return _make_unavailable_result(f"Invalid suspicion_score from Gemini: {raw_score}")
 
         # --- confidence ---
         raw_conf = data.get("confidence", None)

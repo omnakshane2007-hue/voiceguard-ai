@@ -50,6 +50,10 @@ GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", 30))
 # Maximum audio file size accepted by /api/predict (in MB)
 MAX_AUDIO_SIZE_MB = float(os.environ.get("MAX_AUDIO_SIZE_MB", 50))
 
+# Live Gemini Scheduling
+GEMINI_LIVE_INTERVAL_SECONDS = int(os.environ.get("GEMINI_LIVE_INTERVAL_SECONDS", 12))
+GEMINI_CACHE_MAX_AGE_SECONDS = int(os.environ.get("GEMINI_CACHE_MAX_AGE_SECONDS", 30))
+
 # ============================================================
 # RawNet2 Configuration
 # ============================================================

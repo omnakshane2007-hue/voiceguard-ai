@@ -517,20 +517,68 @@ def process_live_chunk():
             logger.debug("[Live] RawNet2 failed: %s", exc)
 
     # 6. Dispatch Gemini analysis to background executor (Non-Blocking)
-    def _background_gemini_task(audio, mime):
-        if config.GEMINI_API_KEY:
+    gemini_cache = system.latest_gemini_result
+    gemini_status = "disabled"
+    should_run_gemini = False
+    current_time = time.time()
+    
+    if config.GEMINI_API_KEY:
+        if system.is_gemini_pending:
+            gemini_status = "pending"
+        elif current_time < system.gemini_cooldown_until:
+            gemini_status = "rate_limited"
+        else:
+            if gemini_cache:
+                age = current_time - gemini_cache.get("timestamp", 0)
+                if age > config.GEMINI_CACHE_MAX_AGE_SECONDS:
+                    gemini_status = "stale"
+                    gemini_cache = None  # Do not use stale cache in fusion
+                elif not gemini_cache.get("available"):
+                    gemini_status = "error"
+                    gemini_cache = None  # Do not use error cache in fusion
+                else:
+                    gemini_status = "fresh"
+            else:
+                gemini_status = "unavailable"
+
+            # Check if interval elapsed
+            time_since_last = current_time - system.gemini_last_request_time
+            if time_since_last >= config.GEMINI_LIVE_INTERVAL_SECONDS:
+                should_run_gemini = True
+
+    if should_run_gemini:
+        system.is_gemini_pending = True
+        system.gemini_last_request_time = current_time
+        
+        def _background_gemini_task(audio, mime):
             try:
                 res = _gemini_analyzer.analyze(audio, mime_type=mime)
-                system.update_gemini_result(res)
+                if not res.get("available") and any("rate limit" in str(l).lower() or "quota" in str(l).lower() for l in res.get("limitations", [])):
+                    logger.warning("[Gemini] Rate limited. Entering cooldown.")
+                    delay = 60
+                    import re
+                    # Look for delay in error message embedded by analyzer
+                    error_msg = res.get("error", "")
+                    if not error_msg and res.get("limitations"):
+                        error_msg = str(res.get("limitations")[0])
+                    match = re.search(r'retry delay: (\d+)s', error_msg.lower())
+                    if match:
+                        try:
+                            delay = int(match.group(1))
+                        except ValueError:
+                            pass
+                    system.gemini_cooldown_until = time.time() + delay
+                else:
+                    res["timestamp"] = time.time()
+                    system.update_gemini_result(res)
             except Exception as exc:
                 logger.debug("[Live] Background Gemini failed: %s", exc)
+            finally:
+                system.is_gemini_pending = False
 
-    if config.GEMINI_API_KEY:
         GEMINI_EXECUTOR.submit(_background_gemini_task, audio_bytes, "audio/wav")
 
-    # 7. Tri-Model Evidence Fusion (uses cached Gemini result if available)
-    gemini_cache = system.latest_gemini_result
-
+    # 7. Tri-Model Evidence Fusion (uses cached Gemini result only if fresh)
     fusion = fuse(
         aasist_result=aasist_result,
         gemini_result=gemini_cache,
@@ -562,6 +610,7 @@ def process_live_chunk():
         "state": current_state,
         "confidence": int(fusion.get("confidence", 90)),
         "processingTimeMs": elapsed_ms,
+        "geminiStatus": gemini_status,
         "models": {
             "aasist": aasist_result is not None,
             "rawnet2": rawnet2_result is not None and rawnet2_result.get("available", False),

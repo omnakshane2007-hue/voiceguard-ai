@@ -26,6 +26,11 @@ class DetectionSystem:
         self.last_update_time = None
         self.latest_gemini_result = None
         
+        # Gemini Scheduling State
+        self.gemini_last_request_time = 0.0
+        self.gemini_cooldown_until = 0.0
+        self.is_gemini_pending = False
+        
         self.prediction_history = []
         
         self.is_running = False

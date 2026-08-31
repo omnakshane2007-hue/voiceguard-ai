@@ -141,7 +141,7 @@ def fuse(
     )
     model_disagreement = disagreement_count > 0
 
-    # 5. Calculate combined confidence score
+    # 5. Calculate combined confidence score (before Evidence-Aware Adjustments)
     confidence = _calculate_combined_confidence(
         aasist_available=aasist_available,
         gemini_result=gemini_result,
@@ -149,6 +149,52 @@ def fuse(
         actual_weights=actual_weights,
         models_used=models_used,
     )
+
+    # 6. Evidence-Aware Fusion (Disagreement Resolution)
+    if aasist_available and rawnet2_available:
+        if abs(aasist_spoof - rawnet2_spoof) > 0.6:
+            model_disagreement = True # Ensure explicitly marked
+            if aasist_spoof > 0.7 and rawnet2_spoof < 0.3:
+                # AASIST says spoof, RawNet2 says authentic
+                if gemini_available and gemini_spoof > 0.6:
+                    # CASE 1: Gemini corroborates AASIST outlier.
+                    pass 
+                elif gemini_available and gemini_spoof < 0.4:
+                    # CASE 2: Gemini corroborates RawNet2. 
+                    confidence = max(10, confidence - 20)
+                    actual_weights["AASIST"] *= 0.25 # Down-weight the AASIST outlier
+                    
+                    # Renormalize explicitly
+                    total = sum(actual_weights.values())
+                    for k in actual_weights: actual_weights[k] /= total
+                    
+                    active_weights = [actual_weights[m] for m in models_used]
+                    final_spoof = sum(v * w for v, w in zip(active_values, active_weights))
+                else:
+                    # CASE 3: Gemini missing/pending/stale (or ~0.50). 
+                    # Use valid AASIST + RawNet2 evidence, reduce CONFIDENCE heavily.
+                    confidence = max(10, confidence - 30)
+                    
+            elif rawnet2_spoof > 0.7 and aasist_spoof < 0.3:
+                # RawNet2 says spoof, AASIST says authentic
+                if gemini_available and gemini_spoof > 0.6:
+                    pass
+                elif gemini_available and gemini_spoof < 0.4:
+                    confidence = max(10, confidence - 20)
+                    actual_weights["RawNet2"] *= 0.25
+                    
+                    total = sum(actual_weights.values())
+                    for k in actual_weights: actual_weights[k] /= total
+                    
+                    active_weights = [actual_weights[m] for m in models_used]
+                    final_spoof = sum(v * w for v, w in zip(active_values, active_weights))
+                else:
+                    confidence = max(10, confidence - 30)
+                    
+    # Re-evaluate final classification if final_spoof changed
+    final_spoof = max(0.0, min(1.0, float(final_spoof)))
+    final_genuine = 1.0 - final_spoof
+    classification = _classify(final_spoof)
 
     logger.info(
         "[Fusion] Models: %s | Spoof scores: AASIST=%s Gemini=%s RawNet2=%s -> final_spoof=%.4f (%s) | disagreement=%s",
