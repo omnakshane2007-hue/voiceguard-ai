@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>VOICEGUARD AI - Security Overview</title>
+    
+    <!-- Tailwind CSS with Forms and Container Queries plugins -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#000000",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#131b2e",
+                        "on-primary-container": "#7c839b",
+                        "secondary": "#0058be",
+                        "secondary-container": "#2170e4",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#fefcff",
+                        "secondary-fixed": "#d8e2ff",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "on-secondary-fixed": "#001a42",
+                        "on-secondary-fixed-variant": "#004395",
+                        "surface": "#fcf8fa",
+                        "surface-dim": "#dcd9db",
+                        "surface-bright": "#fcf8fa",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f6f3f5",
+                        "surface-container": "#f0edef",
+                        "surface-container-high": "#eae7e9",
+                        "surface-container-highest": "#e4e2e4",
+                        "surface-variant": "#e4e2e4",
+                        "on-surface": "#1b1b1d",
+                        "on-surface-variant": "#45464d",
+                        "outline": "#76777d",
+                        "outline-variant": "#c6c6cd",
+                        "background": "#fcf8fa",
+                        "on-background": "#1b1b1d",
+                        "error": "#ba1a1a",
+                        "error-container": "#ffdad6",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#000000",
+                        "tertiary-container": "#271901",
+                        "tertiary-fixed": "#fcdeb5",
+                        "tertiary-fixed-dim": "#dec29a",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#271901",
+                        "on-tertiary-fixed-variant": "#574425",
+                        "on-tertiary-container": "#98805d"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    spacing: {
+                        "unit": "4px",
+                        "gutter": "16px",
+                        "margin": "24px",
+                        "container-max": "1440px"
+                    },
+                    fontFamily: {
+                        "body-base": ["Inter", "Geist", "sans-serif"],
+                        "display-lg": ["IBM Plex Sans", "Space Grotesk", "sans-serif"],
+                        "headline-md": ["IBM Plex Sans", "Space Grotesk", "sans-serif"],
+                        "label-caps": ["IBM Plex Sans", "Space Grotesk", "sans-serif"],
+                        "telemetry-mono": ["JetBrains Mono", "Geist", "monospace"]
+                    },
+                    fontSize: {
+                        "body-base": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "telemetry-mono": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        };
+    </script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <!-- Custom Design Tokens & Dashboard Styles -->
+    <link rel="stylesheet" href="/static/css/dashboard.css"/>
+</head>
+<body class="bg-background text-on-surface font-body-base min-h-screen flex flex-col antialiased select-none">
+
+    <!-- Top Navigation Bar (Shared Stitch Header) -->
+    <nav class="bg-background border-b border-outline-variant flex justify-between items-center w-full px-margin py-4 max-w-container-max mx-auto docked full-width top-0 z-50 sticky">
+        <div class="flex items-center gap-8">
+            <!-- Brand Logo -->
+            <a class="font-display-lg text-headline-md tracking-tighter text-primary cursor-pointer" onclick="window.switchTab('overview')">
+                VOICEGUARD AI
+            </a>
+
+            <!-- Navigation Links -->
+            <div class="hidden md:flex gap-6 items-center" id="mainNav">
+                <button class="nav-tab-btn active" data-tab="overview">Overview</button>
+                <button class="nav-tab-btn" data-tab="live">Live Detection</button>
+                <button class="nav-tab-btn" data-tab="analysis">Audio Analysis</button>
+                <button class="nav-tab-btn" data-tab="history">Attack History</button>
+                <button class="nav-tab-btn" data-tab="analytics">Analytics</button>
+                <button class="nav-tab-btn" data-tab="settings">Settings</button>
+            </div>
+        </div>
+
+        <!-- Controls & Profile -->
+        <div class="flex items-center gap-3">
+            <!-- Micro Status Indicators -->
+            <div id="topMicStatusPill" class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-surface-container-low border border-outline-variant rounded font-telemetry-mono text-[11px]">
+                <span id="topMicDot" class="w-2 h-2 rounded-full bg-[#76777d]"></span>
+                <span id="topMicText">MIC: STANDBY</span>
+            </div>
+
+            <div id="topBackendStatusPill" class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-surface-container-low border border-outline-variant rounded font-telemetry-mono text-[11px]">
+                <span id="topBackendDot" class="w-2 h-2 rounded-full bg-[#10b981]"></span>
+                <span id="topBackendText">BACKEND: ONLINE</span>
+            </div>
+
+            <div class="hidden md:flex items-center gap-2 px-3 py-1 bg-surface-container-low border border-outline-variant rounded font-telemetry-mono text-[11px]">
+                <span class="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" id="sysDot"></span>
+                <span id="sysText">VOICEGUARD AI READY</span>
+            </div>
+
+            <button class="text-primary hover:text-secondary transition-colors scale-95 active:scale-90 transition-transform p-1" title="Sensors" onclick="window.switchTab('overview')">
+                <span class="material-symbols-outlined text-[20px]">sensors</span>
+            </button>
+            <button class="text-primary hover:text-secondary transition-colors scale-95 active:scale-90 transition-transform p-1" title="Microphone Input" id="headerMicBtn">
+                <span class="material-symbols-outlined text-[20px]">mic</span>
+            </button>
+            <button class="text-primary hover:text-secondary transition-colors scale-95 active:scale-90 transition-transform p-1" title="Settings" onclick="window.switchTab('settings')">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+            </button>
+
+            <!-- Analyst Profile Badge -->
+            <div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden border border-outline-variant flex items-center justify-center font-display-lg text-xs font-bold text-primary">
+                VG
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-grow w-full max-w-container-max mx-auto px-margin py-margin flex flex-col gap-margin">
+
+        <!-- =================================================================== -->
+        <!-- VIEW 1: SECURITY OVERVIEW (FINAL STITCH DESIGN) -->
+        <!-- =================================================================== -->
+        <section id="tab-overview" class="tab-content active space-y-margin">
+            
+            <!-- Hero Grid: Current Voice Threat & Live Audio Analysis -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-margin">
+                
+                <!-- CURRENT VOICE THREAT GAUGE CARD -->
+                <div class="bg-surface-container-low border border-outline-variant rounded p-margin flex flex-col items-center justify-center relative min-h-[320px]">
+                    <h2 class="font-label-caps text-label-caps text-on-surface-variant uppercase absolute top-margin left-margin tracking-widest">
+                        CURRENT VOICE THREAT
+                    </h2>
+                    
+                    <div class="relative w-48 h-48 flex items-center justify-center mt-6">
+                        <!-- SVG Gauge -->
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" fill="none" r="45" stroke="#e4e2e4" stroke-dasharray="282.7" stroke-dashoffset="0" stroke-width="8"></circle>
+                            <circle id="heroGaugeCircle" class="transition-all duration-700 ease-out" cx="50" cy="50" fill="none" r="45" stroke="#10b981" stroke-dasharray="282.7" stroke-dashoffset="0" stroke-linecap="round" stroke-width="8"></circle>
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="font-telemetry-mono text-display-lg text-primary" id="heroScoreText">--%</span>
+                            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase mt-1" id="heroScoreLabel">Genuine</span>
+                        </div>
+                    </div>
+
+                    <!-- Risk State Badge -->
+                    <div class="mt-4 px-4 py-1 bg-[#d1fae5] border border-[#10b981] rounded-full flex items-center gap-2" id="heroRiskBadge">
+                        <div class="w-2 h-2 rounded-full bg-[#10b981]" id="heroRiskDot"></div>
+                        <span class="font-label-caps text-label-caps text-[#065f46] uppercase" id="heroRiskText">VOICEGUARD AI READY</span>
+                    </div>
+
+                    <div class="text-[11px] text-on-surface-variant font-telemetry-mono mt-2" id="heroSubtext">
+                        Waiting for speech input...
+                    </div>
+                </div>
+
+                <!-- LIVE AUDIO ANALYSIS WAVEFORM CARD -->
+                <div class="bg-surface-container-low border border-outline-variant rounded p-margin flex flex-col relative min-h-[320px] overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-3">
+                            <h2 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+                                LIVE AUDIO ANALYSIS
+                            </h2>
+                            <span id="liveStatusBadgeOverview" class="px-2 py-0.5 rounded font-telemetry-mono text-[10px] bg-surface border border-outline-variant text-on-surface-variant">
+                                STANDBY
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button id="btnLiveToggleOverview" class="px-3 py-1 bg-secondary text-on-secondary rounded font-label-caps text-xs flex items-center gap-1.5 hover:bg-secondary-container transition-all">
+                                <span class="material-symbols-outlined text-sm">mic</span>
+                                <span id="btnLiveToggleOverviewText">START LIVE STREAM</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Waveform Display Area -->
+                    <div class="flex-grow flex items-center justify-center bg-inverse-surface rounded border border-outline-variant/30 p-4 relative min-h-[180px]">
+                        <canvas id="waveformCanvas" class="w-full h-full block min-h-[140px]"></canvas>
+                        <div class="absolute bottom-2 left-3 text-on-tertiary/50 font-telemetry-mono text-[10px]" id="liveWaveformMeta">
+                            FREQ: 16.0kHz | VAD: STANDBY | AASIST + RAWNET2 + GEMINI FUSION
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DETECTION PIPELINE WORKFLOW -->
+            <div class="bg-surface-container-low border border-outline-variant rounded p-margin overflow-x-auto">
+                <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-6">
+                    DETECTION PIPELINE
+                </h3>
+                
+                <div class="flex items-center justify-between min-w-[640px] relative px-4">
+                    <!-- Connecting Line -->
+                    <div class="absolute top-1/2 left-8 right-8 h-px bg-outline-variant -translate-y-1/2 z-0"></div>
+                    
+                    <!-- Node 1: MIC INPUT -->
+                    <div class="relative z-10 flex flex-col items-center gap-2 bg-surface-container-low px-2" id="pipeN1">
+                        <div class="w-4 h-4 rounded-full border-2 border-secondary bg-background flex items-center justify-center" id="pipeDot1">
+                            <div class="w-1.5 h-1.5 bg-secondary rounded-full"></div>
+                        </div>
+                        <span class="font-label-caps text-label-caps text-on-surface">MIC INPUT</span>
+                    </div>
+
+                    <!-- Node 2: VAD -->
+                    <div class="relative z-10 flex flex-col items-center gap-2 bg-surface-container-low px-2" id="pipeN2">
+                        <div class="w-4 h-4 rounded-full border-2 border-secondary bg-background flex items-center justify-center" id="pipeDot2">
+                            <div class="w-1.5 h-1.5 bg-secondary rounded-full"></div>
+                        </div>
+                        <span class="font-label-caps text-label-caps text-on-surface">VAD</span>
+                    </div>
+
+                    <!-- Node 3: AASIST -->
+                    <div class="relative z-10 flex flex-col items-center gap-2 bg-surface-container-low px-2" id="pipeN3">
+                        <div class="w-4 h-4 rounded-full border-2 border-secondary bg-background flex items-center justify-center pulse-dot" id="pipeDot3">
+                            <div class="w-1.5 h-1.5 bg-secondary rounded-full"></div>
+                        </div>
+                        <span class="font-label-caps text-label-caps text-on-surface font-bold">AASIST</span>
+                    </div>
+
+                    <!-- Node 4: RISK ENGINE -->
+                    <div class="relative z-10 flex flex-col items-center gap-2 bg-surface-container-low px-2" id="pipeN4">
+                        <div class="w-4 h-4 rounded-full border-2 border-outline-variant bg-background flex items-center justify-center" id="pipeDot4">
+                            <div class="w-1.5 h-1.5 bg-outline-variant rounded-full"></div>
+                        </div>
+                        <span class="font-label-caps text-label-caps text-on-surface-variant">RISK ENGINE</span>
+                    </div>
+
+                    <!-- Node 5: DECISION -->
+                    <div class="relative z-10 flex flex-col items-center gap-2 bg-surface-container-low px-2" id="pipeN5">
+                        <div class="w-4 h-4 rounded-full border-2 border-outline-variant bg-background flex items-center justify-center" id="pipeDot5">
+                            <div class="w-1.5 h-1.5 bg-outline-variant rounded-full"></div>
+                        </div>
+                        <span class="font-label-caps text-label-caps text-on-surface-variant">DECISION</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two-Column Section: Confidence Timeline & Latest Telemetry -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-margin">
+                <!-- Left 8 Cols: Confidence Chart & Prevention Story -->
+                <div class="lg:col-span-8 space-y-margin">
+                    <!-- Confidence Timeline Chart -->
+                    <div class="bg-surface-container-low border border-outline-variant rounded p-margin">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+                                REAL-TIME CONFIDENCE TIMELINE
+                            </h3>
+                            <div class="flex items-center gap-3 font-telemetry-mono text-[11px] text-on-surface-variant">
+                                <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-[#10b981]"></span> SAFE (&gt;60%)</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-[#f59e0b]"></span> SUSPICIOUS</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-[#ba1a1a]"></span> HIGH RISK (&lt;30%)</span>
+                            </div>
+                        </div>
+                        <div class="h-44 relative">
+                            <canvas id="scoreChart" class="w-full h-full block"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Prevention Center (Compelling SIH Story) -->
+                    <div class="bg-surface-container-low border border-outline-variant rounded p-margin">
+                        <div class="flex justify-between items-center mb-4 border-b border-outline-variant pb-2">
+                            <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+                                PREVENTION CENTER
+                            </h3>
+                            <span class="font-telemetry-mono text-[11px] text-secondary">DETECT &rarr; VERIFY &rarr; BLOCK &rarr; ALERT</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="border border-secondary/40 bg-secondary/5 rounded p-3 flex flex-col justify-between">
+                                <div>
+                                    <span class="font-label-caps text-label-caps text-secondary uppercase block mb-1">1. DETECT</span>
+                                    <p class="text-xs text-on-surface-variant">AASIST neural voice cloning analysis</p>
+                                </div>
+                                <span class="font-telemetry-mono text-[10px] font-bold text-secondary mt-2">ACTIVE</span>
+                            </div>
+                            <div class="border border-outline-variant bg-surface rounded p-3 flex flex-col justify-between hover:bg-surface-variant transition-colors cursor-pointer" onclick="window.showPrototypeNotice('Liveness Challenge Response')">
+                                <div>
+                                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">2. VERIFY</span>
+                                    <p class="text-xs text-on-surface-variant">Dynamic liveness vocal challenge</p>
+                                </div>
+                                <span class="font-telemetry-mono text-[10px] text-outline mt-2">PLANNED</span>
+                            </div>
+                            <div class="border border-outline-variant bg-surface rounded p-3 flex flex-col justify-between hover:bg-surface-variant transition-colors cursor-pointer" onclick="window.showPrototypeNotice('Authorization Interception')">
+                                <div>
+                                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">3. BLOCK</span>
+                                    <p class="text-xs text-on-surface-variant">Halt voice call / payment token</p>
+                                </div>
+                                <span class="font-telemetry-mono text-[10px] text-outline mt-2">NEXT SECURITY LAYER</span>
+                            </div>
+                            <div class="border border-outline-variant bg-surface rounded p-3 flex flex-col justify-between hover:bg-surface-variant transition-colors cursor-pointer" onclick="window.showPrototypeNotice('Sec-Ops Incident Reporting')">
+                                <div>
+                                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">4. ALERT</span>
+                                    <p class="text-xs text-on-surface-variant">Broadcast SIEM incident packet</p>
+                                </div>
+                                <span class="font-telemetry-mono text-[10px] text-outline mt-2">PLANNED</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right 4 Cols: Latest Analysis Telemetry Stream -->
+                <div class="lg:col-span-4 flex flex-col">
+                    <div class="bg-surface-container-low border border-outline-variant rounded p-margin flex-grow flex flex-col">
+                        <div class="flex justify-between items-center mb-4 border-b border-outline-variant pb-2">
+                            <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+                                LATEST ANALYSIS
+                            </h3>
+                            <span class="w-2 h-2 rounded-full bg-secondary pulse-dot"></span>
+                        </div>
+                        <div class="flex-grow flex flex-col gap-2 overflow-y-auto max-h-[380px] font-telemetry-mono text-telemetry-mono divide-y divide-outline-variant/40" id="telemetryStreamList">
+                            <!-- Intentional startup state when waiting -->
+                            <div class="py-2 text-on-surface-variant text-center" id="telemetryStartupPrompt">
+                                <span class="material-symbols-outlined text-2xl text-outline mb-1">hearing</span>
+                                <div class="font-label-caps text-label-caps uppercase text-on-surface">WAITING FOR SPEECH INPUT</div>
+                                <div class="text-[11px] text-on-surface-variant mt-1">Microphone stream active. Evaluating vocal features upon speech detection.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW 2: LIVE DETECTION (FOCUSED CONSOLE) -->
+        <!-- =================================================================== -->
+        <section id="tab-live" class="tab-content space-y-margin">
+            <div class="border-b border-outline-variant pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                <div>
+                    <h1 class="font-headline-md text-headline-md text-on-surface">Live Detection Console</h1>
+                    <p class="font-body-base text-body-base text-on-surface-variant mt-1">Real-time browser microphone streaming with WebRTC VAD and multi-model neural inference.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="liveBackendStatusPill" class="px-3 py-1 bg-[#d1fae5] text-[#065f46] border border-[#10b981] rounded font-telemetry-mono text-[11px] flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+                        BACKEND: READY
+                    </span>
+                    <span id="liveLatencyPill" class="px-3 py-1 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded font-telemetry-mono text-[11px]">
+                        LATENCY: -- ms
+                    </span>
+                    <button id="btnLiveToggleConsole" class="px-4 py-2 bg-secondary text-on-secondary rounded font-label-caps text-xs flex items-center gap-2 hover:bg-secondary-container transition-all">
+                        <span class="material-symbols-outlined text-base">mic</span>
+                        <span id="btnLiveToggleConsoleText">START CONTINUOUS DETECTION</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Error Banner -->
+            <div id="liveErrorBanner" class="hidden p-4 bg-error-container border border-error rounded flex items-center justify-between">
+                <div class="flex items-center gap-3 text-on-error-container">
+                    <span class="material-symbols-outlined text-error">error</span>
+                    <span class="font-body-base text-xs" id="liveErrorText">Microphone error occurred.</span>
+                </div>
+                <button type="button" class="text-on-error-container hover:opacity-75" onclick="document.getElementById('liveErrorBanner').classList.add('hidden')">
+                    <span class="material-symbols-outlined text-sm">close</span>
+                </button>
+            </div>
+
+            <!-- Bento Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-margin">
+                <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">VAD Speech Ratio</span>
+                    <span class="font-display-lg text-headline-md text-secondary" id="liveVadRatio">0.00</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant block mt-1">Threshold: &ge; 0.20 triggers inference</span>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Inference Chunks</span>
+                    <span class="font-display-lg text-headline-md text-primary" id="liveChunkCount">0 / 0</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant block mt-1">Processed / Total chunks</span>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Hysteresis State</span>
+                    <span class="font-display-lg text-headline-md text-[#10b981]" id="liveHysteresisState">SAFE</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant block mt-1">5-chunk rolling average</span>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant rounded p-4">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Active Pipeline</span>
+                    <span class="font-display-lg text-headline-md text-secondary" id="liveActivePipelineText">TRI-MODEL</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant block mt-1" id="liveModelsDetail">AASIST + RawNet2 + Gemini</span>
+                </div>
+            </div>
+
+            <!-- Focused Waveform Area -->
+            <div class="bg-surface-container-low border border-outline-variant rounded p-margin">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+                        HIGH-RESOLUTION SPECTRAL DENSITY &amp; LIVE MICROPHONE FFT
+                    </h3>
+                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="liveConsoleStreamStatus">
+                        STREAM: STANDBY
+                    </span>
+                </div>
+                <div class="h-64 bg-inverse-surface rounded p-4 relative">
+                    <canvas id="liveConsoleCanvas" class="w-full h-full block"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW 3: AUDIO AUTHENTICITY ANALYSIS (FINAL STITCH SCREEN) -->
+        <!-- =================================================================== -->
+        <section id="tab-analysis" class="tab-content space-y-margin">
+            <!-- Workspace Header -->
+            <div class="mb-4 border-b border-outline-variant pb-4">
+                <h1 class="font-headline-md text-headline-md text-on-surface">Audio Authenticity Analysis</h1>
+                <p class="font-body-base text-body-base text-on-surface-variant mt-1">Upload or select a sample for deep-neural verification of synthetic voice anomalies.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+                <!-- Upload / Input Area (Left 8 cols) -->
+                <section class="lg:col-span-8 flex flex-col gap-gutter">
+                    <!-- Drop Zone -->
+                    <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-low p-8 flex flex-col items-center justify-center min-h-[300px] transition-all hover:border-secondary cursor-pointer relative overflow-hidden group" id="drop-zone">
+                        <input type="file" id="audioFileInput" accept=".wav,.flac,.mp3,.mpeg,.m4a,.ogg" class="hidden"/>
+                        <div class="absolute inset-0 grid-bg opacity-30"></div>
+                        <div class="z-10 flex flex-col items-center text-center">
+                            <span class="material-symbols-outlined text-4xl text-on-surface-variant mb-4 group-hover:text-secondary transition-colors">cloud_upload</span>
+                            <h3 class="font-headline-md text-headline-md mb-2 text-on-surface">Drop Audio File Here</h3>
+                            <p class="font-body-base text-body-base text-on-surface-variant mb-6">Supported formats: WAV, MP3, MPEG, M4A, FLAC, OGG. Max 50MB.</p>
+                            <button type="button" class="bg-primary text-on-primary font-label-caps text-label-caps px-6 py-2 rounded-DEFAULT hover:bg-surface-tint transition-colors uppercase" id="btnBrowseFile">
+                                Browse Files
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sample Test Files -->
+                    <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest p-6">
+                        <h4 class="font-label-caps text-label-caps text-on-surface-variant mb-4 uppercase">Sample Test Files (Workspace)</h4>
+                        <div class="flex flex-wrap gap-4" id="sampleFilesList">
+                            <button type="button" class="sample-pill-btn flex items-center gap-2 border border-outline-variant rounded-DEFAULT px-4 py-2 hover:border-secondary hover:bg-surface-container-low transition-colors text-left group" data-file="synthetic_spoof_test.wav">
+                                <span class="material-symbols-outlined text-error text-sm">warning</span>
+                                <div>
+                                    <span class="block font-telemetry-mono text-telemetry-mono text-on-surface">synthetic_spoof_test.wav</span>
+                                    <span class="block font-body-base text-[10px] text-on-surface-variant">Inject sample</span>
+                                </div>
+                            </button>
+
+                            <button type="button" class="sample-pill-btn flex items-center gap-2 border border-outline-variant rounded-DEFAULT px-4 py-2 hover:border-secondary hover:bg-surface-container-low transition-colors text-left group" data-file="dummy.wav">
+                                <span class="material-symbols-outlined text-secondary text-sm">check_circle</span>
+                                <div>
+                                    <span class="block font-telemetry-mono text-telemetry-mono text-on-surface">dummy.wav</span>
+                                    <span class="block font-body-base text-[10px] text-on-surface-variant">Inject sample</span>
+                                </div>
+                            </button>
+
+                            <button type="button" class="sample-pill-btn flex items-center gap-2 border border-outline-variant rounded-DEFAULT px-4 py-2 hover:border-secondary hover:bg-surface-container-low transition-colors text-left group" data-file="silence_control.wav">
+                                <span class="material-symbols-outlined text-outline text-sm">volume_off</span>
+                                <div>
+                                    <span class="block font-telemetry-mono text-telemetry-mono text-on-surface">silence_control.wav</span>
+                                    <span class="block font-body-base text-[10px] text-on-surface-variant">Inject sample</span>
+                                </div>
+                            </button>
+                        </div>
+
+                        <!-- Audio Player & Analyze Trigger -->
+                        <div class="mt-4 pt-4 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4 hidden" id="fileReadyBar">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-secondary">audio_file</span>
+                                <div>
+                                    <span class="font-telemetry-mono text-xs font-bold text-on-surface" id="selectedFileTitle">sample.wav</span>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant block" id="selectedFileSize">0 KB</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 w-full sm:w-auto">
+                                <audio id="fileAudioPlayer" controls class="h-8 max-w-[200px]"></audio>
+                                <button type="button" class="bg-primary text-on-primary font-label-caps text-label-caps px-6 py-2 rounded-DEFAULT hover:bg-surface-tint transition-colors uppercase whitespace-nowrap" id="btnExecuteAnalysis">
+                                    Analyze Audio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Step Progress (shown during analysis) -->
+                    <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest p-5 hidden" id="analysis-steps-panel">
+                        <h4 class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-3">Analysis Pipeline</h4>
+                        <div class="space-y-2" id="analysis-steps-list">
+                            <div class="flex items-center gap-3" id="step-upload">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="upload"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Uploading audio...</span>
+                            </div>
+                            <div class="flex items-center gap-3" id="step-aasist">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="aasist"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Analyzing with AASIST...</span>
+                            </div>
+                            <div class="flex items-center gap-3" id="step-gemini">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="gemini"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Analyzing with Gemini...</span>
+                            </div>
+                            <div class="flex items-center gap-3" id="step-rawnet2">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="rawnet2"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Analyzing with RawNet2...</span>
+                            </div>
+                            <div class="flex items-center gap-3" id="step-fusion">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="fusion"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Cross-validating 3-model evidence...</span>
+                            </div>
+                            <div class="flex items-center gap-3" id="step-complete">
+                                <span class="step-icon w-5 h-5 rounded-full border-2 border-outline-variant flex items-center justify-center flex-shrink-0" data-step="complete"></span>
+                                <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Generating final risk assessment...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Technical Spectral Fingerprint Waveform -->
+                    <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest p-6 hidden flex-col gap-4" id="analysis-viz">
+                        <div class="flex justify-between items-center border-b border-outline-variant pb-2">
+                            <h4 class="font-label-caps text-label-caps text-on-surface-variant uppercase">Spectral Fingerprint</h4>
+                            <span class="font-telemetry-mono text-telemetry-mono text-secondary">ANALYSIS_COMPLETE</span>
+                        </div>
+                        <div class="h-36 bg-surface-container-high relative border border-outline-variant rounded-sm overflow-hidden flex items-end p-2 gap-[1px]">
+                            <canvas id="analysisSpectralCanvas" class="w-full h-full block"></canvas>
+                        </div>
+                        <div class="flex justify-between text-on-surface-variant opacity-70">
+                            <span class="font-telemetry-mono text-[10px]">0.0s</span>
+                            <span class="font-telemetry-mono text-[10px]" id="spectralDurationLabel">--s</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Analysis Results Sidebar (Right 4 cols) -->
+                <aside class="lg:col-span-4 flex flex-col gap-gutter">
+                    <!-- State: Empty (Before analysis) -->
+                    <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-low p-6 flex-grow flex flex-col items-center justify-center text-center opacity-70 min-h-[300px]" id="empty-state">
+                        <span class="material-symbols-outlined text-3xl mb-4 text-outline">query_stats</span>
+                        <p class="font-telemetry-mono text-telemetry-mono text-on-surface-variant">AWAITING_INPUT</p>
+                    </div>
+
+                    <!-- State: Results (Shown on analysis) -->
+                    <div class="hidden flex-col gap-gutter h-full" id="results-state">
+                        <!-- Threat Gauge Card -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest p-6 relative overflow-hidden">
+                            <div class="absolute top-0 left-0 right-0 h-[2px] bg-secondary" id="status-bar"></div>
+                            <h4 class="font-label-caps text-label-caps text-on-surface-variant mb-6 uppercase tracking-wider">Analysis Result</h4>
+                            
+                            <div class="flex flex-col items-center justify-center mb-6 relative">
+                                <div class="relative w-32 h-32 flex items-center justify-center">
+                                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                        <path class="text-surface-variant stroke-current" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke-width="3"></path>
+                                        <path class="text-secondary stroke-current transition-all duration-1000 ease-out" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" id="gauge-fill" stroke-dasharray="0, 100" stroke-width="3"></path>
+                                    </svg>
+                                    <div class="absolute flex flex-col items-center">
+                                        <span class="font-telemetry-mono text-2xl font-bold text-on-surface" id="score-text">--%</span>
+                                        <span class="font-label-caps text-[9px] text-on-surface-variant uppercase mt-0.5" id="score-sublabel">Genuine</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center">
+                                <span class="inline-block border px-3 py-1 font-label-caps text-label-caps rounded-sm uppercase" id="threat-state">UNKNOWN</span>
+                            </div>
+                        </div>
+
+                        <!-- Technical Metadata -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest flex-grow">
+                            <div class="border-b border-outline-variant p-4">
+                                <h4 class="font-label-caps text-label-caps text-on-surface-variant uppercase">Technical Metadata</h4>
+                            </div>
+                            <div class="p-0">
+                                <table class="w-full text-left font-telemetry-mono text-telemetry-mono">
+                                    <tbody>
+                                        <tr class="border-b border-outline-variant/50">
+                                            <td class="py-2.5 px-4 text-on-surface-variant">GENUINE_PROB</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right font-bold" id="metaGenuineProb">--%</td>
+                                        </tr>
+                                        <tr class="border-b border-outline-variant/50">
+                                            <td class="py-2.5 px-4 text-on-surface-variant">SPOOF_PROB</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right font-bold" id="metaSpoofProb">--%</td>
+                                        </tr>
+                                        <tr class="border-b border-outline-variant/50">
+                                            <td class="py-2.5 px-4 text-on-surface-variant">DURATION</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right" id="metaDuration">--s</td>
+                                        </tr>
+                                        <tr class="border-b border-outline-variant/50">
+                                            <td class="py-2.5 px-4 text-on-surface-variant">SAMPLE_RATE</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right">16000 Hz</td>
+                                        </tr>
+                                        <tr class="border-b border-outline-variant/50">
+                                            <td class="py-2.5 px-4 text-on-surface-variant">SAMPLES</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right" id="metaSamples">--</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-2.5 px-4 text-on-surface-variant">MODEL_CORE</td>
+                                            <td class="py-2.5 px-4 text-on-surface text-right" id="metaModelCore">AASIST + Gemini + RawNet2</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- AI Analysis Scores Panel — 3-Layer Display -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest overflow-hidden" id="ai-analysis-panel">
+                            <!-- Header -->
+                            <div class="bg-surface-container-low border-b border-outline-variant px-4 py-3 flex items-center justify-between">
+                                <h4 class="font-label-caps text-label-caps text-primary uppercase">Multi-Model AI Analysis</h4>
+                                <span class="font-telemetry-mono text-[10px] text-secondary" id="gemini-status-badge">AASIST + GEMINI + RAWNET2</span>
+                            </div>
+
+                            <!-- ═══ LAYER A: INDIVIDUAL MODEL SCORES ═══ -->
+                            <div class="px-4 pt-3 pb-1">
+                                <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">A — Model Scores</span>
+                            </div>
+                            <div class="px-4 pb-3 space-y-3">
+
+                                <!-- AASIST Score Row -->
+                                <div>
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase">AASIST Neural</span>
+                                            <span class="font-telemetry-mono text-[9px] px-1.5 py-0.5 bg-surface-variant rounded text-on-surface-variant" id="aiAasistWeight">wt —</span>
+                                            <span class="font-telemetry-mono text-[9px] font-bold" id="aiAasistVerdict"></span>
+                                        </div>
+                                        <span class="font-telemetry-mono text-xs font-bold text-on-surface" id="aiAasistScore">--%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+                                        <div class="h-full bg-secondary transition-all duration-700" id="aiAasistBar" style="width:0%"></div>
+                                    </div>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant">Graph attention spoof probability</span>
+                                </div>
+
+                                <!-- Gemini Score Row -->
+                                <div id="gemini-score-row">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase">Gemini Audio AI</span>
+                                            <span class="font-telemetry-mono text-[9px] px-1.5 py-0.5 bg-surface-variant rounded text-on-surface-variant" id="aiGeminiWeight">wt —</span>
+                                            <span class="font-telemetry-mono text-[9px] font-bold" id="aiGeminiVerdict"></span>
+                                        </div>
+                                        <span class="font-telemetry-mono text-xs font-bold text-on-surface" id="aiGeminiScore">--%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+                                        <div class="h-full bg-secondary transition-all duration-700" id="aiGeminiBar" style="width:0%"></div>
+                                    </div>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="aiGeminiClassification">Multimodal LLM acoustic analysis</span>
+                                </div>
+                                <!-- Gemini Unavailable Row -->
+                                <div class="hidden" id="gemini-unavailable-row">
+                                    <div class="flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant rounded text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-[14px]">warning</span>
+                                        <span class="font-telemetry-mono text-[10px]">Gemini unavailable — excluded from fusion, weights renormalized</span>
+                                    </div>
+                                </div>
+
+                                <!-- RawNet2 Score Row -->
+                                <div id="rawnet2-score-row">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase">RawNet2 Anti-Spoof</span>
+                                            <span class="font-telemetry-mono text-[9px] px-1.5 py-0.5 bg-surface-variant rounded text-on-surface-variant" id="aiRawnet2Weight">wt —</span>
+                                            <span class="font-telemetry-mono text-[9px] font-bold" id="aiRawnet2Verdict"></span>
+                                        </div>
+                                        <span class="font-telemetry-mono text-xs font-bold text-on-surface" id="aiRawnet2Score">--%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+                                        <div class="h-full bg-secondary transition-all duration-700" id="aiRawnet2Bar" style="width:0%"></div>
+                                    </div>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="aiRawnet2Classification">Raw waveform SincConv analysis</span>
+                                </div>
+                                <!-- RawNet2 Unavailable Row -->
+                                <div class="hidden" id="rawnet2-unavailable-row">
+                                    <div class="flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant rounded text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-[14px]">warning</span>
+                                        <span class="font-telemetry-mono text-[10px]">RawNet2 unavailable — excluded from fusion, weights renormalized</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ═══ LAYER B: FUSION SCORE ═══ -->
+                            <div class="border-t border-outline-variant bg-surface-container-low/40 px-4 pt-3 pb-1">
+                                <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">B — Fusion Score</span>
+                            </div>
+                            <div class="px-4 pb-3 pt-2 space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-label-caps text-[10px] text-secondary uppercase font-bold">Weighted Combined Risk</span>
+                                        <!-- Model Disagreement Badge — hidden by default, shown when models disagree -->
+                                        <span class="hidden font-telemetry-mono text-[9px] px-1.5 py-0.5 bg-[#fef3c7] border border-[#f59e0b] rounded text-[#92400e] font-bold" id="disagreementBadge">⚠ MODELS DISAGREE</span>
+                                    </div>
+                                    <span class="font-telemetry-mono text-xs font-bold" id="aiFusionScore">--%</span>
+                                </div>
+                                <div class="w-full h-2 bg-surface-variant rounded-full overflow-hidden">
+                                    <div class="h-full transition-all duration-700" id="aiFusionBar" style="width:0%"></div>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant">Dynamic multi-model fusion</span>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="aiFusionModels"></span>
+                                </div>
+                                <!-- Individual verdicts on disagreement -->
+                                <div class="hidden" id="disagreementDetail">
+                                    <div class="mt-1 px-2 py-1.5 bg-[#fef3c7]/60 border border-[#f59e0b]/40 rounded text-[10px] font-telemetry-mono text-[#92400e]">
+                                        <span class="font-bold">Individual verdicts: </span><span id="disagreementVerdicts"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ═══ LAYER C: FINAL RISK CLASSIFICATION ═══ -->
+                            <div class="border-t border-outline-variant bg-surface-container-low/60 px-4 pt-3 pb-1">
+                                <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">C — Final Risk Classification</span>
+                            </div>
+                            <div class="px-4 pb-4 pt-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <span class="font-label-caps text-[10px] font-bold px-3 py-1.5 rounded border" id="aiFinalRiskPill">UNKNOWN</span>
+                                        <div class="text-left">
+                                            <div class="font-telemetry-mono text-[10px] text-on-surface-variant">Thresholds active:</div>
+                                            <div class="font-telemetry-mono text-[9px] text-on-surface-variant" id="aiThresholdDisplay">low=0.40 | high=0.70</div>
+                                        </div>
+                                    </div>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="aiFusionConfidence">Confidence: —%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detection Evidence -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest hidden" id="evidence-panel">
+                            <div class="bg-surface-container-low border-b border-outline-variant px-4 py-3">
+                                <h4 class="font-label-caps text-label-caps text-primary uppercase">Detection Evidence</h4>
+                            </div>
+                            <ul class="p-4 space-y-1.5" id="evidence-list"></ul>
+                        </div>
+
+                        <!-- Suspicious Segments Timeline -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest hidden" id="segments-panel">
+                            <div class="bg-surface-container-low border-b border-outline-variant px-4 py-3">
+                                <h4 class="font-label-caps text-label-caps text-primary uppercase">Suspicious Segments</h4>
+                            </div>
+                            <div class="p-4">
+                                <div class="relative h-8 bg-surface-container rounded overflow-hidden" id="segments-timeline">
+                                    <!-- Timeline bars injected by JS -->
+                                </div>
+                                <div class="flex justify-between mt-1">
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant">0s</span>
+                                    <span class="font-telemetry-mono text-[10px] text-on-surface-variant" id="segments-duration-label">--s</span>
+                                </div>
+                                <ul class="mt-3 space-y-1" id="segments-list"></ul>
+                            </div>
+                        </div>
+
+                        <!-- Action Recommendation -->
+                        <div class="border border-outline-variant rounded-DEFAULT bg-surface-container-lowest p-6">
+                            <h4 class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Action Recommendation</h4>
+                            <p class="font-body-base text-body-base text-on-surface" id="recommendation-text">Awaiting analysis completion...</p>
+                            <div class="mt-4 flex gap-2">
+                                <button type="button" class="flex-1 border border-outline-variant text-on-surface font-label-caps text-label-caps py-2 rounded-DEFAULT hover:bg-surface-container-low transition-colors uppercase" onclick="window.switchTab('history')">Session Log</button>
+                                <button type="button" class="flex-1 bg-primary text-on-primary font-label-caps text-label-caps py-2 rounded-DEFAULT hover:bg-surface-tint transition-colors uppercase" id="primary-action-btn">Verify</button>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW 4: SESSION TELEMETRY / ATTACK HISTORY (FINAL STITCH SCREEN) -->
+        <!-- =================================================================== -->
+        <section id="tab-history" class="tab-content space-y-margin">
+            <!-- Header -->
+            <header class="mb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-outline-variant pb-4">
+                <div>
+                    <h1 class="font-headline-md text-headline-md text-on-surface mb-1 tracking-tight">SESSION TELEMETRY</h1>
+                    <p class="font-body-base text-body-base text-on-surface-variant">Detailed log of audio analysis events and potential threat vectors in active session.</p>
+                </div>
+            </header>
+
+            <!-- Toolbar -->
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 bg-surface-container-low p-4 rounded-DEFAULT border border-outline-variant">
+                <!-- Filter Pills -->
+                <div class="flex gap-2" id="telemetryFilterGroup">
+                    <button type="button" class="telemetry-filter-btn px-4 py-1.5 rounded-DEFAULT bg-primary text-on-primary font-label-caps text-label-caps border border-primary active" data-filter="ALL">ALL</button>
+                    <button type="button" class="telemetry-filter-btn px-4 py-1.5 rounded-DEFAULT bg-surface text-on-surface-variant font-label-caps text-label-caps border border-outline-variant hover:bg-surface-variant transition-colors" data-filter="SAFE">SAFE</button>
+                    <button type="button" class="telemetry-filter-btn px-4 py-1.5 rounded-DEFAULT bg-surface text-on-surface-variant font-label-caps text-label-caps border border-outline-variant hover:bg-surface-variant transition-colors" data-filter="SUSPICIOUS">SUSPICIOUS</button>
+                    <button type="button" class="telemetry-filter-btn px-4 py-1.5 rounded-DEFAULT bg-surface text-on-surface-variant font-label-caps text-label-caps border border-outline-variant hover:bg-surface-variant transition-colors" data-filter="HIGH_RISK">HIGH RISK</button>
+                </div>
+
+                <div class="flex items-center gap-4 w-full lg:w-auto">
+                    <!-- Search Input -->
+                    <div class="relative w-full lg:w-64">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+                        <input type="text" id="telemetrySearchInput" placeholder="Search events..." class="w-full pl-9 pr-4 py-1.5 bg-surface border border-outline-variant rounded-DEFAULT text-body-base focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary placeholder-on-surface-variant text-on-surface"/>
+                    </div>
+                    <!-- Export CSV Button -->
+                    <button type="button" class="flex items-center gap-2 px-4 py-1.5 bg-surface border border-outline-variant rounded-DEFAULT text-on-surface font-label-caps text-label-caps hover:bg-surface-variant transition-colors whitespace-nowrap" id="btnTelemetryExportCsv">
+                        <span class="material-symbols-outlined text-[16px]">download</span>
+                        <span>EXPORT CSV</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Data Table Container -->
+            <div class="bg-surface border border-outline-variant rounded-DEFAULT overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-surface-container-low border-b border-outline-variant">
+                            <tr>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Timestamp (UTC)</th>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Event / Detection Result</th>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Source</th>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Confidence</th>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase">Status</th>
+                                <th class="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant uppercase text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-telemetry-mono text-telemetry-mono text-on-surface divide-y divide-outline-variant" id="telemetryTableBody">
+                            <tr>
+                                <td colspan="6" class="p-6 text-center text-on-surface-variant">
+                                    Awaiting incoming audio detections or file analyses...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Footer Pagination & Count -->
+                <div class="px-4 py-3 bg-surface border-t border-outline-variant flex justify-between items-center">
+                    <span class="font-telemetry-mono text-telemetry-mono text-on-surface-variant" id="telemetryCountLabel">Showing 0 session records</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant">Session Telemetry: Active Memory</span>
+                </div>
+            </div>
+
+            <!-- Bottom Stats Bento -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div class="bg-surface border border-outline-variant rounded-DEFAULT p-4 flex items-center justify-between">
+                    <div>
+                        <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Total Session Inferences</span>
+                        <span class="font-display-lg text-headline-md text-on-surface tracking-tight" id="bentoTotalInferences">0</span>
+                    </div>
+                    <div class="w-12 h-12 bg-surface-container-low rounded-full flex items-center justify-center border border-outline-variant">
+                        <span class="material-symbols-outlined text-on-surface-variant">analytics</span>
+                    </div>
+                </div>
+
+                <div class="bg-surface border border-outline-variant rounded-DEFAULT p-4 flex items-center justify-between">
+                    <div>
+                        <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-1">Current Threat Trend</span>
+                        <div class="flex items-baseline gap-2">
+                            <span class="font-display-lg text-headline-md text-[#10b981] tracking-tight" id="bentoRiskTrend">STABLE</span>
+                            <span class="font-telemetry-mono text-telemetry-mono text-on-surface-variant" id="bentoTrendMeta">No active threat</span>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-surface-container-low rounded-full flex items-center justify-center border border-outline-variant" id="bentoRiskIconWrapper">
+                        <span class="material-symbols-outlined text-secondary" id="bentoRiskIcon">security</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW 5: ANALYTICS (SESSION AGGREGATES) -->
+        <!-- =================================================================== -->
+        <section id="tab-analytics" class="tab-content space-y-margin">
+            <div class="border-b border-outline-variant pb-4 flex justify-between items-end">
+                <div>
+                    <h1 class="font-headline-md text-headline-md text-on-surface">Session Analytics</h1>
+                    <p class="font-body-base text-body-base text-on-surface-variant mt-1">Aggregate statistical distribution across audio interactions.</p>
+                </div>
+                <span class="font-telemetry-mono text-xs text-secondary font-bold">SESSION TELEMETRY</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-margin">
+                <div class="bg-surface border border-outline-variant rounded p-6">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-2">Average Genuine Score</span>
+                    <span class="font-display-lg text-headline-md text-primary block" id="analyticsAvgVal">--%</span>
+                    <div class="w-full bg-surface-container-high h-1.5 rounded overflow-hidden mt-3">
+                        <div class="bg-secondary h-full transition-all duration-500" id="analyticsAvgBar" style="width: 0%;"></div>
+                    </div>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant mt-2 block">Evaluated over active session chunks</span>
+                </div>
+
+                <div class="bg-surface border border-outline-variant rounded p-6">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-2">Threat Classification Counts</span>
+                    <div class="space-y-1 font-telemetry-mono text-xs mt-3">
+                        <div class="flex justify-between"><span class="text-[#10b981]">SAFE:</span><span class="font-bold" id="anaSafeCount">0</span></div>
+                        <div class="flex justify-between"><span class="text-[#f59e0b]">SUSPICIOUS:</span><span class="font-bold" id="anaSuspiciousCount">0</span></div>
+                        <div class="flex justify-between"><span class="text-[#ba1a1a]">HIGH RISK:</span><span class="font-bold" id="anaHighRiskCount">0</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-surface border border-outline-variant rounded p-6">
+                    <span class="font-label-caps text-label-caps text-on-surface-variant uppercase block mb-2">Total Inferences Executed</span>
+                    <span class="font-display-lg text-headline-md text-secondary block" id="anaTotalCount">0</span>
+                    <span class="font-telemetry-mono text-[11px] text-on-surface-variant mt-2 block">Real-time AASIST forward passes</span>
+                </div>
+            </div>
+
+            <!-- Empty State for Deeper Historical Multi-day Datasets -->
+            <div class="border border-outline-variant border-dashed p-10 flex flex-col items-center justify-center text-center bg-surface-container-low/40 rounded">
+                <span class="material-symbols-outlined text-4xl mb-3 text-outline">data_alert</span>
+                <h4 class="font-headline-md text-base text-on-surface font-semibold">COLLECTING SESSION DATA</h4>
+                <p class="text-xs text-on-surface-variant mt-1 max-w-md">Longitudinal vocal drift tracking, biometric clustering, and multi-day telemetry require continuous session accumulation.</p>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW 6: SYSTEM CONFIGURATION / SETTINGS (FINAL STITCH SCREEN) -->
+        <!-- =================================================================== -->
+        <section id="tab-settings" class="tab-content space-y-margin">
+            <div class="mb-4 border-b border-outline-variant pb-4">
+                <h1 class="font-headline-md text-headline-md text-primary mb-1">System Parameters</h1>
+                <p class="text-on-surface-variant">Configure detection engines, audio processing, and automated response rules.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+                <!-- Left Nav (Desktop) -->
+                <div class="lg:col-span-3 space-y-2 hidden lg:block">
+                    <div class="p-3 bg-surface-container-low rounded border border-outline-variant flex items-center justify-between">
+                        <span class="font-label-caps text-label-caps text-primary">Detection Engine</span>
+                        <span class="material-symbols-outlined text-sm text-secondary">tune</span>
+                    </div>
+                    <div class="p-3 rounded flex items-center justify-between hover:bg-surface-container-low transition-colors">
+                        <span class="font-label-caps text-label-caps text-on-surface-variant">Audio Processing</span>
+                    </div>
+                    <div class="p-3 rounded flex items-center justify-between hover:bg-surface-container-low transition-colors">
+                        <span class="font-label-caps text-label-caps text-on-surface-variant">Model Status</span>
+                    </div>
+                    <div class="p-3 rounded flex items-center justify-between hover:bg-surface-container-low transition-colors">
+                        <span class="font-label-caps text-label-caps text-on-surface-variant">Prevention Rules</span>
+                    </div>
+                </div>
+
+                <!-- Settings Canvas (Right 9 cols) -->
+                <div class="lg:col-span-9 space-y-6">
+                    <!-- DETECTION CONFIGURATION -->
+                    <div class="bg-surface rounded-lg border border-outline-variant overflow-hidden">
+                        <div class="bg-surface-container-low px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-primary">radar</span>
+                                <h2 class="font-label-caps text-label-caps text-primary">Detection Configuration</h2>
+                            </div>
+                            <span class="bg-secondary-fixed text-on-secondary-fixed-variant px-2 py-1 rounded font-telemetry-mono text-telemetry-mono">CURRENT CONFIG</span>
+                        </div>
+                        
+                        <div class="p-6 space-y-6">
+                            <!-- Suspicious Threshold -->
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="font-body-base text-on-surface font-medium">Suspicious Threshold</label>
+                                    <span class="font-telemetry-mono text-telemetry-mono text-secondary">60% (0.60)</span>
+                                </div>
+                                <input class="w-full" max="100" min="0" type="range" value="60" disabled/>
+                                <p class="text-xs text-on-surface-variant mt-1">Scores below 60% transition into SUSPICIOUS state.</p>
+                            </div>
+
+                            <!-- High-Risk Threshold -->
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="font-body-base text-on-surface font-medium">High-Risk Threshold</label>
+                                    <span class="font-telemetry-mono text-telemetry-mono text-error">30% (0.30)</span>
+                                </div>
+                                <input class="w-full" max="100" min="0" type="range" value="30" disabled/>
+                                <p class="text-xs text-on-surface-variant mt-1">Scores below 30% trigger HIGH_RISK alarm state.</p>
+                            </div>
+
+                            <!-- Temporal Smoothing -->
+                            <div class="pt-4 border-t border-outline-variant flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-body-base text-on-surface font-medium">Temporal Smoothing (5 Chunks)</h3>
+                                    <p class="text-xs text-on-surface-variant">Apply rolling average to detection scores to reduce false positives from short artifacts.</p>
+                                </div>
+                                <div class="font-telemetry-mono text-xs font-bold text-secondary">ACTIVE</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LIVE BACKEND ENDPOINT CONFIGURATION -->
+                    <div class="bg-surface rounded-lg border border-outline-variant overflow-hidden">
+                        <div class="bg-surface-container-low px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-primary">hub</span>
+                                <h2 class="font-label-caps text-label-caps text-primary">Live Detection Backend Endpoint</h2>
+                            </div>
+                            <span class="font-telemetry-mono text-[11px] px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed-variant">CORS ENABLED</span>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <p class="font-body-base text-xs text-on-surface-variant">
+                                By default, live audio chunks are sent to the local/deployed app origin. If you run a dedicated persistent PyTorch GPU server (e.g. FastAPI / EC2 / RunPod), enter its public URL below.
+                            </p>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <input id="settingsBackendUrlInput" type="text" placeholder="https://your-gpu-backend.com (Leave blank for default origin)" class="flex-grow px-3 py-2 border border-outline-variant rounded font-telemetry-mono text-xs bg-surface text-on-surface focus:outline-none focus:border-secondary" />
+                                <button id="btnSaveBackendUrl" class="px-4 py-2 bg-secondary text-on-secondary rounded font-label-caps text-xs hover:bg-secondary-container transition-all">
+                                    SAVE ENDPOINT
+                                </button>
+                            </div>
+                            <div class="text-[11px] font-telemetry-mono text-on-surface-variant" id="settingsBackendUrlFeedback">
+                                Current active endpoint: <span class="text-primary font-bold" id="settingsCurrentEndpointLabel">Default (Same Origin)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AUDIO ENGINE & MODEL STATUS BENTO -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- AUDIO ENGINE -->
+                        <div class="bg-surface rounded-lg border border-outline-variant overflow-hidden flex flex-col">
+                            <div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant flex items-center gap-3">
+                                <span class="material-symbols-outlined text-primary text-sm">graphic_eq</span>
+                                <h2 class="font-label-caps text-label-caps text-primary">Audio Engine</h2>
+                            </div>
+                            <div class="p-4 flex-grow space-y-3 font-telemetry-mono text-xs">
+                                <div>
+                                    <label class="block text-xs font-medium text-on-surface-variant mb-1 font-body-base">Sample Rate</label>
+                                    <div class="p-2 border border-outline-variant rounded bg-surface text-primary font-bold">16,000 Hz (Standard AASIST)</div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-on-surface-variant mb-1 font-body-base">VAD Mode (Voice Activity Detection)</label>
+                                    <div class="p-2 border border-outline-variant rounded bg-surface text-primary">Balanced / WebRTC Mode 1</div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-on-surface-variant mb-1 font-body-base">Tensor Chunk Size</label>
+                                    <div class="p-2 border border-outline-variant rounded bg-surface text-primary">64,600 samples (~4.04s)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- MODEL STATUS -->
+                        <div class="bg-surface rounded-lg border border-outline-variant overflow-hidden flex flex-col">
+                            <div class="bg-surface-container-low px-4 py-3 border-b border-outline-variant flex items-center gap-3">
+                                <span class="material-symbols-outlined text-primary text-sm">memory</span>
+                                <h2 class="font-label-caps text-label-caps text-primary">Model Status</h2>
+                            </div>
+                            <div class="p-4 flex-grow">
+                                <table class="w-full text-left border-collapse">
+                                    <tbody class="font-telemetry-mono text-telemetry-mono text-on-surface divide-y divide-outline-variant">
+                                        <tr class="h-8">
+                                            <td class="text-on-surface-variant font-label-caps text-label-caps">Engine Version</td>
+                                            <td class="text-right font-bold">AASIST-v2.4.1</td>
+                                        </tr>
+                                        <tr class="h-8">
+                                            <td class="text-on-surface-variant font-label-caps text-label-caps">Checkpoint</td>
+                                            <td class="text-right flex items-center justify-end gap-2 text-secondary">
+                                                <span class="w-2 h-2 rounded-full bg-secondary block"></span>
+                                                Active (AASIST.pth)
+                                            </td>
+                                        </tr>
+                                        <tr class="h-8">
+                                            <td class="text-on-surface-variant font-label-caps text-label-caps">PyTorch Device</td>
+                                            <td class="text-right">CPU / CUDA Available</td>
+                                        </tr>
+                                        <tr class="h-8">
+                                            <td class="text-on-surface-variant font-label-caps text-label-caps">Status</td>
+                                            <td class="text-right text-[#10b981] font-bold" id="settingsModelLoaded">LOADED &amp; READY</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PREVENTION SETTINGS (PLANNED) -->
+                    <div class="bg-surface rounded-lg border border-outline-variant overflow-hidden opacity-85">
+                        <div class="bg-surface-container-highest px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-on-surface-variant">shield_locked</span>
+                                <h2 class="font-label-caps text-label-caps text-on-surface-variant">Prevention Settings</h2>
+                            </div>
+                            <span class="bg-tertiary-fixed text-on-tertiary-fixed-variant px-2 py-1 rounded font-telemetry-mono text-telemetry-mono">PLANNED FEATURE</span>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-on-surface-variant mb-4">Automated mitigation rules based on detection thresholds. Downstream interception will be enabled in future releases.</p>
+                            <div class="space-y-3 opacity-60">
+                                <div class="flex items-center gap-3 p-3 border border-outline-variant rounded bg-surface-container-low">
+                                    <input class="rounded border-outline" disabled type="checkbox" checked/>
+                                    <div>
+                                        <div class="font-medium text-sm">Automated Voice Risk Alerting</div>
+                                        <div class="text-xs text-on-surface-variant">Emit winsound and visual alarm upon HIGH_RISK detection state.</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3 p-3 border border-outline-variant rounded bg-surface-container-low">
+                                    <input class="rounded border-outline" disabled type="checkbox"/>
+                                    <div>
+                                        <div class="font-medium text-sm">Dynamic Liveness Challenge Injection</div>
+                                        <div class="text-xs text-on-surface-variant">Prompt speaker with randomized acoustic challenge when score is SUSPICIOUS.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Prototype Notice Modal -->
+    <div id="prototypeModal" class="fixed inset-0 bg-[#000000]/50 z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-[#FFFFFF] border border-[#000000] p-6 max-w-md w-full rounded space-y-4">
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2 text-secondary">
+                    <span class="material-symbols-outlined">info</span>
+                    <h3 class="font-headline-md font-bold text-base text-primary" id="modalTitle">Security Feature</h3>
+                </div>
+                <button type="button" class="text-outline hover:text-primary" onclick="document.getElementById('prototypeModal').classList.add('hidden')">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p class="text-xs text-on-surface-variant" id="modalBody">This capability is designated as part of the advanced enterprise tier and is marked as PLANNED in the prototype.</p>
+            <div class="flex justify-end">
+                <button type="button" class="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2 rounded uppercase" onclick="document.getElementById('prototypeModal').classList.add('hidden')">
+                    Understood
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared Stitch Footer -->
+    <footer class="bg-surface-container-low border-t border-outline-variant flex justify-between items-center w-full px-margin py-unit max-w-container-max mx-auto mt-auto bottom-0">
+        <span class="font-body-base text-xs text-on-surface-variant">© 2024 VOICEGUARD AI. Enterprise Grade Voice Security.</span>
+        <div class="flex gap-4 text-xs">
+            <a class="font-body-base text-on-surface-variant hover:underline hover:text-primary transition-all" href="#">v2.4.0-stable</a>
+            <a class="font-body-base text-on-surface-variant hover:underline hover:text-primary transition-all" href="#">Documentation</a>
+            <a class="font-body-base text-on-surface-variant hover:underline hover:text-primary transition-all" href="#">System Status</a>
+            <a class="font-body-base text-on-surface-variant hover:underline hover:text-primary transition-all" href="#">Privacy Policy</a>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="/static/js/visualizer.js"></script>
+    <script src="/static/js/chart.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
