@@ -1173,7 +1173,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // ═════════════════════════════════════════════
 
         // ── A1. AASIST score bar (spoof direction) ──
-        const aasistSpoofPct = Math.round((1 - (data.score || 0)) * 100);
+        const aasistSpoofPct = fusion.aasistSpoof != null 
+            ? Math.round(fusion.aasistSpoof * 100) 
+            : (data.aasist && data.aasist.score != null ? Math.round((1 - data.aasist.score) * 100) : Math.round((1 - (data.score || 0)) * 100));
         const aasistWt = fusion.aasistWeight != null ? Math.round(fusion.aasistWeight * 100) : null;
         const aasistVerdict = fusion.individualVerdicts && fusion.individualVerdicts.AASIST
             ? fusion.individualVerdicts.AASIST : null;

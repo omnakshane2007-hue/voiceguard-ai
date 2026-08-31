@@ -267,6 +267,17 @@ def _build_aasist_status(score: float) -> tuple[str, str]:
         return config.STATE_SAFE, "Safe (Likely Authentic)"
 
 
+def _build_threat_label(status: str) -> str:
+    """Map classification status string to human-readable threat label."""
+    if status == config.STATE_HIGH_RISK or status == "HIGH_RISK":
+        return "High Risk (Likely Cloned/Synthetic)"
+    elif status == config.STATE_SUSPICIOUS or status == "SUSPICIOUS":
+        return "Suspicious (Potentially Cloned)"
+    elif status == config.STATE_SAFE or status == "SAFE":
+        return "Safe (Likely Authentic)"
+    return "Unknown"
+
+
 def _sanitize_error_str(err: Any) -> str:
     """Sanitize error messages to prevent exposing secrets, API keys, or empty strings."""
     if err is None:
@@ -381,23 +392,7 @@ def predict_file():
         }), 500
 
     # -----------------------------------------------------------------------
-    # Compute AASIST-only fields (or fall back to fusion score if AASIST unavailable)
-    # -----------------------------------------------------------------------
-    if aasist_ok:
-        score = aasist_result["score"]
-        original_samples = aasist_result["original_samples"]
-        duration_sec = aasist_result["duration_sec"]
-        status_val, threat_label = _build_aasist_status(score)
-    else:
-        # If AASIST is offline, we must rely solely on the fusion engine output.
-        # We initialize with None to guarantee no fake 0.500 score slips through.
-        original_samples = 0
-        duration_sec = 0.0
-        score = None
-        status_val, threat_label = "UNAVAILABLE", "AASIST Offline"
-
-    # -----------------------------------------------------------------------
-    # 3-Model Fusion
+    # 3-Model Fusion (Single Source of Truth)
     # -----------------------------------------------------------------------
     fusion = fuse(
         aasist_result=aasist_result if aasist_ok else None,
@@ -408,37 +403,55 @@ def predict_file():
         rawnet2_weight=config.RAWNET2_WEIGHT,
     )
 
-    if not aasist_ok:
-        # Reflect composite fusion score as primary score when AASIST is offline
-        score = fusion.get("finalScore")
-        if score is None:
-            aasist_err_detail = _sanitize_error_str(aasist_error or "AASIST offline")
-            rawnet2_err_detail = _sanitize_error_str((rawnet2_result or {}).get("error") or "RawNet2 offline")
-            gemini_err_detail = _sanitize_error_str((gemini_result or {}).get("error") or "Gemini offline")
-            return jsonify({
-                "success": False,
-                "error": "Audio processing failed across all models",
-                "models": {
-                    "aasist": {"available": False, "error": aasist_err_detail},
-                    "rawnet2": {"available": False, "error": rawnet2_err_detail},
-                    "gemini": {"available": False, "error": gemini_err_detail}
-                }
-            }), 500
-        status_val, threat_label = _build_aasist_status(score)
+    final_score = fusion.get("finalScore")
+    if final_score is None:
+        aasist_err_detail = _sanitize_error_str(aasist_error or "AASIST offline")
+        rawnet2_err_detail = _sanitize_error_str((rawnet2_result or {}).get("error") or "RawNet2 offline")
+        gemini_err_detail = _sanitize_error_str((gemini_result or {}).get("error") or "Gemini offline")
+        return jsonify({
+            "success": False,
+            "error": "Audio processing failed across all models",
+            "models": {
+                "aasist": {"available": False, "error": aasist_err_detail},
+                "rawnet2": {"available": False, "error": rawnet2_err_detail},
+                "gemini": {"available": False, "error": gemini_err_detail}
+            }
+        }), 500
+
+    # Single Source of Truth: All top-level composite decision fields derive from Tri-Model Fusion
+    composite_genuine = float(final_score)
+    composite_spoof = float(fusion.get("finalSpoof", 1.0 - composite_genuine))
+    status_val = str(fusion.get("classification", "SAFE"))
+    threat_label = _build_threat_label(status_val)
+
+    # Extract audio sample count and duration
+    original_samples = aasist_result["original_samples"] if (aasist_ok and aasist_result) else 0
+    duration_sec = aasist_result["duration_sec"] if (aasist_ok and aasist_result) else 0.0
+
+    if original_samples == 0:
+        try:
+            y_meta, _ = librosa.load(io.BytesIO(audio_bytes), sr=config.SAMPLE_RATE, mono=True)
+            original_samples = len(y_meta)
+            duration_sec = round(len(y_meta) / config.SAMPLE_RATE, 2)
+        except Exception:
+            pass
 
     # -----------------------------------------------------------------------
-    # Build response — all original fields preserved, new ones appended
+    # Build response — unified top-level composite decision with layer breakdowns
     # -----------------------------------------------------------------------
     response = {
-        # --- Original fields (DO NOT CHANGE) ---
-        "score": score,
+        # --- Top-level composite fields (SINGLE SOURCE OF TRUTH from Fusion) ---
+        "score": composite_genuine,
         "status": status_val,
         "threat_label": threat_label,
         "filename": filename,
         "samples": original_samples,
         "duration_sec": duration_sec,
-        "genuine_probability_percent": round(score * 100, 2),
-        "spoof_probability_percent": round((1.0 - score) * 100, 2),
+        "genuine_probability_percent": round(composite_genuine * 100, 2),
+        "spoof_probability_percent": round(composite_spoof * 100, 2),
+
+        # --- Layer 1: AASIST result ---
+        "aasist": aasist_result,
 
         # --- Layer 2: Gemini analysis result ---
         "gemini": gemini_result,

@@ -155,13 +155,36 @@ class VoiceGuardProductionRegressionTests(unittest.TestCase):
         # Trigger simulated cooldown
         import time
         analyzer._cooldown_until = time.time() + 45.0
-        
+
         # Subsequent analyze call during cooldown should return unavailable immediately without network
         res = analyzer.analyze(self.test_wav_bytes, mime_type="audio/wav")
         self.assertFalse(res["available"])
         self.assertIsNone(res["suspicionScore"])
         err_low = res["error"].lower()
         self.assertTrue("rate limit" in err_low or "quota" in err_low)
+
+    def test_predict_fusion_single_source_of_truth(self):
+        """Verify that top-level API decision fields strictly derive from fusion."""
+        client = app.test_client()
+        data = {'file': (io.BytesIO(self.test_wav_bytes), 'test_sine.wav', 'audio/wav')}
+        res = client.post('/api/predict', data=data, content_type='multipart/form-data')
+        self.assertEqual(res.status_code, 200)
+        body = res.get_json()
+        
+        fusion = body.get("fusion")
+        self.assertIsNotNone(fusion, "Response must include fusion object")
+        
+        # Invariants: Top-level fields MUST equal fusion fields exactly
+        self.assertAlmostEqual(body["score"], fusion["finalScore"], places=5,
+                               msg="top-level score must equal fusion.finalScore")
+        self.assertEqual(body["genuine_probability_percent"], round(fusion["finalScore"] * 100, 2),
+                         msg="top-level genuine_probability_percent must equal round(fusion.finalScore * 100, 2)")
+        self.assertEqual(body["spoof_probability_percent"], round(fusion["finalSpoof"] * 100, 2),
+                         msg="top-level spoof_probability_percent must equal round(fusion.finalSpoof * 100, 2)")
+        self.assertEqual(body["status"], fusion["classification"],
+                         msg="top-level status must equal fusion.classification")
+        self.assertIn("threat_label", body)
+        self.assertIn(body["status"], ["SAFE", "SUSPICIOUS", "HIGH_RISK"])
 
 
 if __name__ == "__main__":
