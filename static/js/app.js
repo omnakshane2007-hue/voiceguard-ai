@@ -273,6 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.streamTimer = null;
             this.processedChunks = 0;
             this.totalChunks = 0;
+            this.requestSeq = 0;
+            this.latestProcessedSeq = 0;
 
             this.initEvents();
             this.checkBackendHealth();
@@ -284,7 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async checkBackendHealth() {
             try {
-                const res = await fetch(getApiUrl('/health'), { method: 'GET' });
+                const res = await fetch(getApiUrl(`/health?_ts=${Date.now()}`), {
+                    method: 'GET',
+                    cache: 'no-store'
+                });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const health = await res.json();
                 
@@ -489,7 +494,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.setState('LISTENING');
                 addTelemetryEvent("Live Microphone Connected", `Sample Rate: ${nativeSampleRate}Hz → 16,000Hz PCM`, "action");
 
-                // 5. Send chunks every 1.5 seconds
+                // 5. Send chunks every 1.5 seconds (clear any previous timer first)
+                if (this.streamTimer) {
+                    clearInterval(this.streamTimer);
+                    this.streamTimer = null;
+                }
                 this.streamTimer = setInterval(() => this.sendLiveChunk(), 1500);
 
             } catch (err) {
@@ -511,6 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             this.inFlight = true;
             this.totalChunks++;
+            const currentSeq = ++this.requestSeq;
 
             const orderedSamples = new Float32Array(this.chunkSamples);
             const startIdx = this.bufferIndex;
@@ -526,6 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Safe client diagnostic logging (NO audio content logged)
             console.log("[VoiceGuard Mic Diagnostic]", {
+                seq: currentSeq,
                 sampleRate: this.targetSampleRate,
                 channels: 1,
                 samples: this.chunkSamples,
@@ -538,13 +549,18 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('file', wavBlob, 'live_chunk.wav');
 
             const sendTimestamp = performance.now();
+            const controller = new AbortController();
+            const abortTimeout = setTimeout(() => controller.abort(), 12000);
 
             try {
-                const res = await fetch(this.getBackendUrl('/api/live_chunk'), {
+                const res = await fetch(this.getBackendUrl(`/api/live_chunk?_ts=${Date.now()}`), {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: controller.signal,
+                    cache: 'no-store'
                 });
 
+                clearTimeout(abortTimeout);
                 const latencyMs = Math.round(performance.now() - sendTimestamp);
 
                 if (!res.ok) {
@@ -552,10 +568,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const data = await res.json();
+
+                // Drop out-of-order delayed responses
+                if (currentSeq < this.latestProcessedSeq) {
+                    console.log(`[LiveDetectionManager] Dropping stale chunk response #${currentSeq} (latest is #${this.latestProcessedSeq})`);
+                    return;
+                }
+                this.latestProcessedSeq = currentSeq;
+
                 this.handleLiveTelemetry(data, latencyMs);
 
             } catch (err) {
-                console.warn("[LiveDetectionManager] Chunk inference error:", err);
+                clearTimeout(abortTimeout);
+                console.warn(`[LiveDetectionManager] Chunk #${currentSeq} inference error:`, err);
                 if (elements.liveLatencyPill) elements.liveLatencyPill.textContent = `LATENCY: ERR`;
             } finally {
                 this.inFlight = false;
@@ -564,10 +589,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         handleLiveTelemetry(data, clientLatencyMs) {
             const isSpeech = Boolean(data.speechDetected);
-            const speechRatio = data.speechRatio || 0.0;
-            const status = data.state || "SAFE";
-            const smoothedScore = typeof data.smoothedScore === 'number' ? data.smoothedScore : 1.0;
-            const currentScore = typeof data.currentScore === 'number' ? data.currentScore : smoothedScore;
+            const speechRatio = typeof data.speechRatio === 'number' ? data.speechRatio : 0.0;
+            const status = data.state || (data.fusion && data.fusion.classification ? data.fusion.classification : "SAFE");
+            
+            // Single source of truth: genuine score (0.0 to 1.0)
+            const smoothedScore = (typeof data.smoothedScore === 'number' && !isNaN(data.smoothedScore))
+                ? data.smoothedScore
+                : (data.fusion && typeof data.fusion.finalScore === 'number' ? data.fusion.finalScore : 1.0);
+            const currentScore = (typeof data.currentScore === 'number' && !isNaN(data.currentScore))
+                ? data.currentScore
+                : (data.fusion && typeof data.fusion.finalScore === 'number' ? data.fusion.finalScore : smoothedScore);
             const processingTimeMs = data.processingTimeMs || clientLatencyMs;
 
             if (isSpeech) {
@@ -701,7 +732,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Live detection active -> Real audio chunks take precedence
         }
         try {
-            const response = await fetch(getApiUrl('/status'));
+            const response = await fetch(getApiUrl(`/status?_ts=${Date.now()}`), {
+                method: 'GET',
+                cache: 'no-store'
+            });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             updateDashboardWithRealData(data);
@@ -911,7 +945,9 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', async () => {
             const filename = btn.dataset.file;
             try {
-                const response = await fetch(getApiUrl(`/api/sample_file/${filename}`));
+                const response = await fetch(getApiUrl(`/api/sample_file/${filename}?_ts=${Date.now()}`), {
+                    cache: 'no-store'
+                });
                 if (!response.ok) throw new Error("Could not fetch sample");
                 const blob = await response.blob();
                 const file = new File([blob], filename, { type: "audio/wav" });
@@ -961,7 +997,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const response = await fetch(getApiUrl('/api/predict'), {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    cache: 'no-store'
                 });
 
                 clearTimeout(stepTimer1);

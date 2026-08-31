@@ -44,6 +44,15 @@ _cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
 _cors_origins = [o.strip() for o in _cors_origins_env.split(",")] if "," in _cors_origins_env else _cors_origins_env
 CORS(app, origins=_cors_origins, supports_credentials=True)
 
+@app.after_request
+def add_no_cache_headers(response):
+    """Ensure dynamic API responses are never cached by browsers or edge proxies."""
+    if request.path.startswith(("/api", "/status", "/health", "/report")):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # Global detection system instance
 system = DetectionSystem()
 system.add_listener(winsound_alert_listener)
