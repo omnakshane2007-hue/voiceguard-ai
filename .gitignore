@@ -1,0 +1,60 @@
+# VOICEGUARD AI — Git Ignore
+# Environment & secrets
+.env
+*.env.local
+*.env.development
+*.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# PyTorch
+*.pt
+*.pth
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (for package-lock.json etc)
+node_modules/
+
+# Temp / Uploads
+uploads/
+tmp/
+
+.vercel
+.env*
+# Audio test files
+*.wav
+*.mp3
+*.mpeg
+*.mp4
+
+# Generated reports
+*.pdf
+*.html

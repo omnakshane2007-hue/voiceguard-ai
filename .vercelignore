@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.vscode/
+.git/
+aasist/
+*.pth
+*.wav
+*.mpeg
+!templates/
+!static/
+!services/
+!api/

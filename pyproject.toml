@@ -1,0 +1,24 @@
+[project]
+name = "voiceguardai"
+version = "0.1.0"
+description = "VOICEGUARD AI - Real-Time Voice Cloning Detection System"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "flask",
+    "librosa",
+    "scipy",
+    "soundfile",
+    "numpy",
+    "google-genai",
+    "python-dotenv",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+extraPaths = [
+    ".",
+    "aasist",
+    ".venv/Lib/site-packages"
+]
