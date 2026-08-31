@@ -147,7 +147,12 @@ def status():
         "sample_rate": config.SAMPLE_RATE,
         "chunk_samples": config.AUDIO_CHUNK_SAMPLES,
         "suspicious_threshold": config.SUSPICIOUS_THRESHOLD,
-        "high_risk_threshold": config.HIGH_RISK_THRESHOLD
+        "high_risk_threshold": config.HIGH_RISK_THRESHOLD,
+        "models_health": {
+            "AASIST": "loaded" if (system.model_loader and system.model_loader.model is not None) else "unavailable",
+            "RawNet2": "loaded" if _rawnet2_analyzer.is_available() else "unavailable",
+            "Gemini": "enabled" if bool(config.GEMINI_API_KEY) else "disabled"
+        }
     })
 
 
@@ -334,7 +339,8 @@ def predict_file():
             executor.submit(run_gemini_task),
             executor.submit(run_rawnet2_task),
         ]
-        concurrent.futures.wait(futures, timeout=12.0)
+        # Increase timeout to allow Gemini to complete (currently ~21s in production)
+        concurrent.futures.wait(futures, timeout=45.0)
 
     # Check if at least one model succeeded
     gemini_ok = gemini_result is not None and gemini_result.get("available", False)
@@ -343,7 +349,13 @@ def predict_file():
 
     if not (aasist_ok or gemini_ok or rawnet2_ok):
         return jsonify({
-            "error": f"Audio processing failed across all models: {aasist_error or 'No model available'}"
+            "success": False,
+            "error": "Audio processing failed across all models",
+            "models": {
+                "aasist": {"available": False, "error": aasist_error},
+                "rawnet2": {"available": False},
+                "gemini": {"available": False}
+            }
         }), 500
 
     # -----------------------------------------------------------------------
@@ -355,11 +367,12 @@ def predict_file():
         duration_sec = aasist_result["duration_sec"]
         status_val, threat_label = _build_aasist_status(score)
     else:
-        # Fallback values when running in cloud serverless mode
+        # If AASIST is offline, we must rely solely on the fusion engine output.
+        # We initialize with None to guarantee no fake 0.500 score slips through.
         original_samples = 0
         duration_sec = 0.0
-        score = fusion.get("finalScore", 0.5)
-        status_val, threat_label = _build_aasist_status(score)
+        score = None
+        status_val, threat_label = "UNAVAILABLE", "AASIST Offline"
 
     # -----------------------------------------------------------------------
     # 3-Model Fusion
@@ -375,7 +388,17 @@ def predict_file():
 
     if not aasist_ok:
         # Reflect composite fusion score as primary score when AASIST is offline
-        score = fusion.get("finalScore", 0.5)
+        score = fusion.get("finalScore")
+        if score is None:
+             return jsonify({
+                 "success": False,
+                 "error": "Audio processing failed across all models",
+                 "models": {
+                     "aasist": {"available": False},
+                     "rawnet2": {"available": False},
+                     "gemini": {"available": False}
+                 }
+             }), 500
         status_val, threat_label = _build_aasist_status(score)
 
     # -----------------------------------------------------------------------
@@ -587,7 +610,11 @@ def process_live_chunk():
         rawnet2_weight=config.RAWNET2_WEIGHT,
     )
 
-    genuine_score = float(fusion.get("finalScore", 0.5))
+    genuine_score = fusion.get("finalScore")
+    if genuine_score is None:
+        return jsonify({"error": "Live processing failed: No models available for fusion"}), 500
+    
+    genuine_score = float(genuine_score)
     spoof_score = float(fusion.get("finalSpoof", 1.0 - genuine_score))
 
     # Update system state & smoothed history

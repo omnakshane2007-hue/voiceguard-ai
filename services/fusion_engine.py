@@ -116,8 +116,8 @@ def fuse(
         final_spoof = sum(v * w for v, w in zip(active_values, active_weights))
     else:
         # Fallback when all models fail
-        logger.error("[Fusion] All anti-spoofing models unavailable. Falling back to neutral score.")
-        final_spoof = 0.5
+        logger.error("[Fusion] All anti-spoofing models unavailable. Returning empty fusion result.")
+        return {}
 
     # Clamp scores to [0.0, 1.0]
     final_spoof = max(0.0, min(1.0, float(final_spoof)))
