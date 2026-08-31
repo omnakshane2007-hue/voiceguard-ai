@@ -20,9 +20,8 @@ dist/
 build/
 *.egg
 
-# PyTorch
-*.pt
-*.pth
+# PyTorch checkpoints — managed by Git LFS (see .gitattributes)
+# Do NOT add *.pth here — model weights in aasist/ are tracked via LFS
 
 # IDE
 .vscode/

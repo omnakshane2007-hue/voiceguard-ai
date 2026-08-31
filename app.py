@@ -12,6 +12,7 @@ except ImportError:
 import librosa
 import numpy as np
 from flask import Flask, jsonify, request, render_template, send_from_directory
+from flask_cors import CORS
 
 from detector import DetectionSystem, winsound_alert_listener
 from services.gemini_audio_analyzer import GeminiAudioAnalyzer
@@ -33,6 +34,14 @@ logger = logging.getLogger(__name__)
 # Flask app & global detection system (preserved exactly from original)
 # ---------------------------------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
+
+# ---------------------------------------------------------------------------
+# CORS — allow any origin so the Vercel frontend can reach Railway backend.
+# Restrict to your Vercel domains in production by setting CORS_ORIGINS env var.
+# ---------------------------------------------------------------------------
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_origins_env.split(",")] if "," in _cors_origins_env else _cors_origins_env
+CORS(app, origins=_cors_origins, supports_credentials=True)
 
 # Global detection system instance
 system = DetectionSystem()
@@ -62,21 +71,29 @@ if _rawnet2_analyzer.is_available():
 else:
     logger.warning("[App] RawNet2 model is NOT available.")
 
+# ---------------------------------------------------------------------------
+# Boot AASIST model at module import time so Gunicorn workers have it loaded.
+# This runs whether started via `python app.py` or `gunicorn app:app`.
+# ---------------------------------------------------------------------------
+def _boot_system():
+    """Load AASIST model and start the detection state machine."""
+    try:
+        system.setup()
+        system.start()
+        logger.info("[Boot] DetectionSystem online. AASIST loaded: %s",
+                    system.model_loader.model is not None)
+    except Exception as exc:
+        logger.error("[Boot] DetectionSystem failed to start: %s", exc)
+        logger.warning("[Boot] Continuing without AASIST — Gemini+RawNet2 fusion only.")
+
+
+_boot_system()
+
 
 import time
 from datetime import datetime
 
-# ---------------------------------------------------------------------------
-# CORS Configuration (allows frontend on Vercel or separate domain)
-# ---------------------------------------------------------------------------
-@app.after_request
-def apply_cors_headers(response):
-    origin = request.headers.get('Origin', '*')
-    response.headers['Access-Control-Allow-Origin'] = origin
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Range'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
+# (CORS is handled by flask-cors above — manual after_request hook removed)
 
 
 @app.route('/health', methods=['GET', 'OPTIONS'])
@@ -584,13 +601,13 @@ def download_pdf_report():
 # ===========================================================================
 
 if __name__ == '__main__':
-    print("Setting up detection system...")
+    # DetectionSystem already booted via _boot_system() at module load.
+    # Just start the Flask dev server.
+    port = int(os.environ.get('PORT', 5000))
     try:
-        system.setup()
-        system.start()
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
-        print(f"Failed to start system: {e}")
+        print(f"Failed to start Flask dev server: {e}")
     finally:
         system.stop()
 
