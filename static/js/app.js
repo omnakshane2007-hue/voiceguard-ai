@@ -418,11 +418,29 @@ document.addEventListener('DOMContentLoaded', () => {
             this.analyser = null;
             this.sourceNode = null;
             this.scriptNode = null;
+            this.gainNode = null;
+
             this.targetSampleRate = 16000;
             this.chunkSamples = 32000; // 2.0s of 16kHz audio buffer
             this.rollingBuffer = new Float32Array(this.chunkSamples);
             this.bufferIndex = 0;
             this.totalSamplesRecorded = 0;
+
+            // Diagnostic Counters for Developer Live HUD
+            this.audioProcessEvents = 0;
+            this.nonzeroFrames = 0;
+            this.currentRms = 0.0;
+            this.lastChunkByteSize = 0;
+            this.lastChunkSamples = 0;
+            this.lastChunkRms = 0.0;
+            this.requestsStarted = 0;
+            this.requestsCompleted = 0;
+            this.requestsFailed = 0;
+            this.lastHttpStatus = null;
+            this.lastLatencyMs = 0;
+            this.lastFusionScore = null;
+            this.lastSmoothedScore = null;
+
             this.inFlight = false;
             this.streamTimer = null;
             this.processedChunks = 0;
@@ -430,8 +448,23 @@ document.addEventListener('DOMContentLoaded', () => {
             this.requestSeq = 0;
             this.latestProcessedSeq = 0;
 
+            // Retain on window for GC protection
+            window._vgLiveManager = this;
+
             this.initEvents();
             this.checkBackendHealth();
+        }
+
+        ensureAudioContext() {
+            if (!this.audioContext || this.audioContext.state === 'closed') {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                this.audioContext = new AudioContextClass();
+            }
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            window._vgAudioContext = this.audioContext;
+            return this.audioContext;
         }
 
         getBackendUrl(path) {
@@ -569,6 +602,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         initEvents() {
             const toggleHandler = () => {
+                // Ensure AudioContext is synchronously created and resumed inside the user gesture
+                this.ensureAudioContext();
+
                 if (['MIC_CONNECTED', 'LISTENING', 'ANALYZING', 'SAFE', 'SUSPICIOUS', 'HIGH_RISK'].includes(this.state)) {
                     this.stop();
                 } else {
@@ -579,6 +615,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (elements.headerMicBtn) elements.headerMicBtn.addEventListener('click', toggleHandler);
             if (elements.btnLiveToggleOverview) elements.btnLiveToggleOverview.addEventListener('click', toggleHandler);
             if (elements.btnLiveToggleConsole) elements.btnLiveToggleConsole.addEventListener('click', toggleHandler);
+
+            // Minimize / expand Live Debug HUD
+            const btnToggleDbgHUD = document.getElementById('btnToggleDbgHUD');
+            const dbgHUDContent = document.getElementById('dbgHUDContent');
+            if (btnToggleDbgHUD && dbgHUDContent) {
+                btnToggleDbgHUD.addEventListener('click', () => {
+                    const isHidden = dbgHUDContent.classList.toggle('hidden');
+                    btnToggleDbgHUD.textContent = isHidden ? "EXPAND" : "MINIMIZE";
+                });
+            }
         }
 
         async start() {
@@ -589,7 +635,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error("Your browser does not support microphone capture (navigator.mediaDevices is unavailable).");
                 }
 
-                // 1. Request Microphone Access
+                // 1. Synchronously ensure AudioContext is instantiated & running
+                this.ensureAudioContext();
+
+                // 2. Request Microphone Access
                 this.mediaStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         channelCount: 1,
@@ -600,20 +649,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     video: false
                 });
 
-                // 2. Initialize Web Audio Context
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                this.audioContext = new AudioContextClass();
+                // 3. Resume AudioContext again if browser suspended it during getUserMedia prompt
                 if (this.audioContext.state === 'suspended') {
                     await this.audioContext.resume();
                 }
 
                 const nativeSampleRate = this.audioContext.sampleRate;
 
-                // 3. Create AnalyserNode for Real-Time Waveform & FFT
+                // 4. Create AnalyserNode for Real-Time Waveform & FFT
                 this.analyser = this.audioContext.createAnalyser();
                 this.analyser.fftSize = 256;
-                this.analyser.smoothingTimeConstant = 0.8;
+                this.analyser.smoothingTimeConstant = 0.75;
 
+                // 5. Connect Source Node directly to Analyser
                 this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
                 this.sourceNode.connect(this.analyser);
 
@@ -621,16 +669,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (visualizer) visualizer.attachAnalyser(this.analyser);
                 if (liveConsoleVisualizer) liveConsoleVisualizer.attachAnalyser(this.analyser);
 
-                // 4. Script Processor for 16 kHz Chunk Ingestion
+                // 6. Silent GainNode to keep audio graph alive without speaker loopback feedback
+                this.gainNode = this.audioContext.createGain();
+                this.gainNode.gain.value = 0.0;
+
+                // 7. Script Processor for 16 kHz Chunk Ingestion & Resampling
                 this.rollingBuffer = new Float32Array(this.chunkSamples);
                 this.bufferIndex = 0;
                 this.totalSamplesRecorded = 0;
+                this.audioProcessEvents = 0;
+                this.nonzeroFrames = 0;
 
                 this.scriptNode = this.audioContext.createScriptProcessor(4096, 1, 1);
                 const resampleRatio = nativeSampleRate / this.targetSampleRate;
 
                 this.scriptNode.onaudioprocess = (e) => {
+                    this.audioProcessEvents++;
                     const inputChannel = e.inputBuffer.getChannelData(0);
+
+                    // Track RMS energy of the raw mic frame
+                    let sumSq = 0.0;
+                    for (let k = 0; k < inputChannel.length; k++) {
+                        const val = inputChannel[k];
+                        sumSq += val * val;
+                    }
+                    const frameRms = Math.sqrt(sumSq / inputChannel.length);
+                    this.currentRms = frameRms;
+                    if (frameRms > 0.0005) {
+                        this.nonzeroFrames++;
+                    }
+
+                    // Linear interpolation downsampling to 16kHz
                     const outputLength = Math.floor(inputChannel.length / resampleRatio);
                     for (let i = 0; i < outputLength; i++) {
                         const originalIndex = i * resampleRatio;
@@ -644,15 +713,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.bufferIndex = (this.bufferIndex + 1) % this.chunkSamples;
                         this.totalSamplesRecorded++;
                     }
+
+                    // Zero out output buffer to avoid any clicks/pop
+                    const outputChannel = e.outputBuffer.getChannelData(0);
+                    outputChannel.fill(0);
                 };
 
                 this.sourceNode.connect(this.scriptNode);
-                this.scriptNode.connect(this.audioContext.destination);
+                this.scriptNode.connect(this.gainNode);
+                this.gainNode.connect(this.audioContext.destination);
+
+                // Strong window anchors against V8 GC
+                window._vgAudioContext = this.audioContext;
+                window._vgSourceNode = this.sourceNode;
+                window._vgScriptNode = this.scriptNode;
+                window._vgGainNode = this.gainNode;
+                window._vgAnalyser = this.analyser;
 
                 this.setState('LISTENING');
                 addTelemetryEvent("Live Microphone Connected", `Sample Rate: ${nativeSampleRate}Hz → 16,000Hz PCM`, "action");
 
-                // 5. Send chunks every 1.5 seconds (clear any previous timer first)
+                // 8. Send chunks every 1.5 seconds (clear any previous timer first)
                 if (this.streamTimer) {
                     clearInterval(this.streamTimer);
                     this.streamTimer = null;
@@ -679,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.inFlight = true;
             this.totalChunks++;
             const currentSeq = ++this.requestSeq;
+            this.requestsStarted++;
 
             const orderedSamples = new Float32Array(this.chunkSamples);
             const startIdx = this.bufferIndex;
@@ -691,6 +773,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const chunkRms = Math.sqrt(sumSq / this.chunkSamples);
             const wavBlob = this.encodeWAV(orderedSamples, this.targetSampleRate);
+
+            this.lastChunkByteSize = wavBlob.size;
+            this.lastChunkSamples = this.chunkSamples;
+            this.lastChunkRms = chunkRms;
 
             console.log(`[VG-LIVE] chunk #${currentSeq} generated size=${wavBlob.size} bytes rms=${chunkRms.toFixed(4)} samples=${this.chunkSamples}`);
             console.log(`[VG-LIVE] request #${currentSeq} started`);
@@ -712,6 +798,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 clearTimeout(abortTimeout);
                 const latencyMs = Math.round(performance.now() - sendTimestamp);
+                this.lastHttpStatus = res.status;
+                this.lastLatencyMs = latencyMs;
+                this.requestsCompleted++;
+
                 console.log(`[VG-LIVE] request #${currentSeq} response ${res.status}`);
 
                 if (!res.ok) {
@@ -733,6 +823,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } catch (err) {
                 clearTimeout(abortTimeout);
+                this.requestsFailed++;
+                this.lastHttpStatus = 'ERR';
                 console.warn(`[VG-LIVE] Chunk #${currentSeq} inference error:`, err);
                 if (elements.liveLatencyPill) elements.liveLatencyPill.textContent = `LATENCY: ERR`;
             } finally {
@@ -762,6 +854,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 : authoritativeScore;
             const processingTimeMs = data.processingTimeMs || clientLatencyMs;
 
+            this.lastFusionScore = typeof data.fusionScore === 'number' ? data.fusionScore : (1.0 - authoritativeScore);
+            this.lastSmoothedScore = authoritativeScore;
+
             if (isSpeech) {
                 this.processedChunks++;
                 this.setState(status);
@@ -769,7 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             liveState.smoothedScore = authoritativeScore;
             liveState.currentScore = currentScore;
-            liveState.fusionScore = data.fusionScore || (1.0 - authoritativeScore);
+            liveState.fusionScore = this.lastFusionScore;
             liveState.state = status;
             liveState.speechRatio = speechRatio;
             liveState.speechDetected = isSpeech;
@@ -867,6 +962,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.scriptNode = null;
             }
 
+            if (this.gainNode) {
+                try { this.gainNode.disconnect(); } catch (e) {}
+                this.gainNode = null;
+            }
+
             if (this.sourceNode) {
                 try { this.sourceNode.disconnect(); } catch (e) {}
                 this.sourceNode = null;
@@ -890,6 +990,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const liveManager = new LiveDetectionManager();
+
+    // =========================================================================
+    // DEVELOPER LIVE DIAGNOSTIC HUD UPDATER
+    // =========================================================================
+    function updateLiveDebugOverlay() {
+        const micState = document.getElementById('dbgMicState');
+        if (!micState) return;
+
+        micState.textContent = liveManager.state;
+        micState.className = ['MIC_CONNECTED', 'LISTENING', 'ANALYZING', 'SAFE', 'SUSPICIOUS', 'HIGH_RISK'].includes(liveManager.state)
+            ? "font-bold text-[#10b981]" : (liveManager.state === 'ERROR' ? "font-bold text-[#ba1a1a]" : "font-bold text-white");
+
+        const audioCtx = liveManager.audioContext;
+        const audioCtxState = document.getElementById('dbgAudioCtxState');
+        if (audioCtxState) {
+            audioCtxState.textContent = audioCtx ? audioCtx.state.toUpperCase() : "N/A";
+            audioCtxState.className = audioCtx && audioCtx.state === 'running' ? "font-bold text-[#10b981]" : "font-bold text-[#f59e0b]";
+        }
+
+        const sampleRates = document.getElementById('dbgSampleRates');
+        if (sampleRates) {
+            sampleRates.textContent = audioCtx ? `${audioCtx.sampleRate}Hz → ${liveManager.targetSampleRate}Hz` : "N/A → 16kHz";
+        }
+
+        const processEvents = document.getElementById('dbgProcessEvents');
+        if (processEvents) processEvents.textContent = `${liveManager.audioProcessEvents}`;
+
+        const nonzeroFrames = document.getElementById('dbgNonzeroFrames');
+        if (nonzeroFrames) nonzeroFrames.textContent = `${liveManager.nonzeroFrames} (RMS: ${(liveManager.currentRms || 0).toFixed(4)})`;
+
+        const bufferSamples = document.getElementById('dbgBufferSamples');
+        if (bufferSamples) bufferSamples.textContent = `${Math.min(liveManager.chunkSamples, liveManager.totalSamplesRecorded)} / ${liveManager.chunkSamples}`;
+
+        const chunksGen = document.getElementById('dbgChunksGen');
+        if (chunksGen) chunksGen.textContent = `${liveManager.totalChunks} (Processed: ${liveManager.processedChunks})`;
+
+        const lastChunkSize = document.getElementById('dbgLastChunkSize');
+        if (lastChunkSize) lastChunkSize.textContent = `${liveManager.lastChunkByteSize || 0} B (RMS: ${(liveManager.lastChunkRms || 0).toFixed(4)})`;
+
+        const requestsStat = document.getElementById('dbgRequestsStat');
+        if (requestsStat) requestsStat.textContent = `${liveManager.requestSeq} start / ${liveManager.requestsCompleted || 0} done / ${liveManager.requestsFailed || 0} err`;
+
+        const lastHttp = document.getElementById('dbgLastHttp');
+        if (lastHttp) lastHttp.textContent = `${liveManager.lastHttpStatus || 'N/A'} (${liveManager.lastLatencyMs || 0}ms)`;
+
+        const lastScores = document.getElementById('dbgLastScores');
+        if (lastScores) lastScores.textContent = `Spoof: ${liveManager.lastFusionScore !== null ? (liveManager.lastFusionScore * 100).toFixed(1) + '%' : 'N/A'} | Smooth: ${liveManager.lastSmoothedScore !== null ? (liveManager.lastSmoothedScore * 100).toFixed(1) + '%' : 'N/A'}`;
+
+        const acceptedSeq = document.getElementById('dbgAcceptedSeq');
+        if (acceptedSeq) acceptedSeq.textContent = `#${liveManager.latestProcessedSeq}`;
+
+        const metersVal = document.getElementById('dbgMetersVal');
+        if (metersVal) {
+            const m1 = elements.heroScoreText ? elements.heroScoreText.textContent : 'N/A';
+            const m2 = elements.scoreText ? elements.scoreText.textContent : 'N/A';
+            metersVal.textContent = `${m1} / ${m2}`;
+        }
+    }
+
+    setInterval(updateLiveDebugOverlay, 250);
 
     // =========================================================================
     // 8. REAL-TIME TELEMETRY POLLING (/status)

@@ -1132,6 +1132,32 @@
         </div>
     </div>
 
+    <!-- Developer Live Diagnostic Overlay -->
+    <div id="vgLiveDebugPanel" class="fixed bottom-4 right-4 z-50 bg-[#121316]/95 border border-[#3b4858] rounded-lg shadow-2xl p-3 font-telemetry-mono text-[11px] text-[#c6c6cd] w-80 backdrop-blur-md transition-all duration-300">
+        <div class="flex items-center justify-between border-b border-[#28313e] pb-1.5 mb-2">
+            <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" id="dbgStatusDot"></span>
+                <span class="font-bold text-white tracking-wider">VOICEGUARD LIVE HUD</span>
+            </div>
+            <button id="btnToggleDbgHUD" class="text-[10px] text-primary hover:text-white px-1.5 py-0.5 bg-[#1b232e] rounded border border-[#2e3a4b]">MINIMIZE</button>
+        </div>
+        <div id="dbgHUDContent" class="space-y-1">
+            <div class="flex justify-between"><span class="text-on-surface-variant">MIC State:</span><span id="dbgMicState" class="font-bold text-white">STOPPED</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">AudioContext:</span><span id="dbgAudioCtxState" class="font-bold text-[#f59e0b]">N/A</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Sample Rates:</span><span id="dbgSampleRates" class="text-white">N/A &rarr; 16kHz</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Process Events:</span><span id="dbgProcessEvents" class="text-white">0</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Non-zero Frames:</span><span id="dbgNonzeroFrames" class="text-white">0</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Rolling Buffer:</span><span id="dbgBufferSamples" class="text-white">0 / 32000</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Generated Chunks:</span><span id="dbgChunksGen" class="text-white">0</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Last Chunk Size:</span><span id="dbgLastChunkSize" class="text-white">0 B (RMS: 0.000)</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Requests:</span><span id="dbgRequestsStat" class="text-white">0 start / 0 done / 0 err</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Last HTTP / Latency:</span><span id="dbgLastHttp" class="text-white">N/A</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Last Fusion / Smoothed:</span><span id="dbgLastScores" class="text-white">N/A</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant">Accepted Seq:</span><span id="dbgAcceptedSeq" class="text-white">#0</span></div>
+            <div class="flex justify-between border-t border-[#28313e] pt-1 mt-1"><span class="text-primary font-bold">Meter #1 / Meter #2:</span><span id="dbgMetersVal" class="font-bold text-[#10b981]">100% / 100%</span></div>
+        </div>
+    </div>
+
     <!-- Shared Stitch Footer -->
     <footer class="bg-surface-container-low border-t border-outline-variant flex justify-between items-center w-full px-margin py-unit max-w-container-max mx-auto mt-auto bottom-0">
         <span class="font-body-base text-xs text-on-surface-variant">© 2026 VOICEGUARD AI. Enterprise Grade Voice Security.</span>
